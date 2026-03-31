@@ -26,6 +26,21 @@ const rowActionItemClass =
 
 const rowActionIconClass = "size-4 shrink-0 text-[#344054]";
 
+/** Fixed column widths so split header/body tables stay aligned. Sum = 1088px. */
+function SubscriptionsTableColGroup() {
+  return (
+    <colgroup>
+      <col style={{ width: 160 }} />
+      <col style={{ width: 280 }} />
+      <col style={{ width: 220 }} />
+      <col style={{ width: 140 }} />
+      <col style={{ width: 100 }} />
+      <col style={{ width: 140 }} />
+      <col style={{ width: 48 }} />
+    </colgroup>
+  );
+}
+
 function SubscriptionRowActions({
   customerName,
   subscriptionId,
@@ -33,6 +48,7 @@ function SubscriptionRowActions({
   displayStatus,
   onPauseConfirmed,
   onResume,
+  onCancelConfirmed,
 }: {
   customerName: string;
   subscriptionId: string;
@@ -45,6 +61,7 @@ function SubscriptionRowActions({
     previousStatus: SubscriptionStatus
   ) => void;
   onResume: (subscriptionId: string) => void;
+  onCancelConfirmed: (subscriptionId: string) => void;
 }) {
   const [pauseModalOpen, setPauseModalOpen] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -217,6 +234,10 @@ function SubscriptionRowActions({
       <CancelSubscriptionModal
         open={cancelModalOpen}
         onOpenChange={setCancelModalOpen}
+        onConfirmCancel={() => {
+          onCancelConfirmed(subscriptionId);
+          setCancelModalOpen(false);
+        }}
       />
       <ResumeSubscriptionModal
         open={resumeModalOpen}
@@ -303,7 +324,7 @@ function HeaderCell({
     <th
       scope="col"
       className={cn(
-        "sticky top-0 z-20 h-9 border-b border-r border-[#d0d5dd] bg-[#f2f4f7] px-3 text-left align-middle [transform:translate3d(0,0,0)]",
+        "h-9 border-b border-r border-[#d0d5dd] bg-[#f2f4f7] px-3 text-left align-middle",
         className
       )}
     >
@@ -534,6 +555,8 @@ export function SubscriptionsTable() {
   const [pausedById, setPausedById] = useState<
     Record<string, SubscriptionStatus>
   >({});
+  /** Locally canceled rows (badge → Canceled until refresh). */
+  const [canceledIds, setCanceledIds] = useState<Record<string, boolean>>({});
 
   const { slice, start, end } = useMemo(() => {
     const startIdx = (page - 1) * perPage;
@@ -564,164 +587,192 @@ export function SubscriptionsTable() {
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col items-start justify-start gap-0 overflow-hidden bg-white">
-      <div className="isolate h-fit max-h-full min-h-0 w-full overflow-auto rounded-[4px] border border-[#d0d5dd] bg-white">
-        <table className="w-full min-w-[960px] border-separate border-spacing-0 text-left">
-          <thead>
-            <tr>
-              <HeaderCell
-                icon={
-                  <img
-                    src="/icons/subscriptions/credit-card.svg"
-                    alt=""
-                    className="size-4 shrink-0 object-contain"
-                    aria-hidden
-                  />
-                }
-                label="Provider"
-                className="w-[160px]"
-              />
-              <HeaderCell
-                icon={
-                  <img
-                    src="/icons/subscriptions/account-circle.svg"
-                    alt=""
-                    className="size-4 shrink-0 object-contain"
-                    aria-hidden
-                  />
-                }
-                label="Customer"
-                className="min-w-[280px]"
-              />
-              <HeaderCell
-                icon={
-                  <img
-                    src="/icons/subscriptions/highlight-mouse-cursor.svg"
-                    alt=""
-                    className="size-4 shrink-0 object-contain"
-                    aria-hidden
-                  />
-                }
-                label="Source"
-                className="min-w-[220px]"
-              />
-              <HeaderCell
-                icon={
-                  <img
-                    src="/icons/subscriptions/calendar-today.svg"
-                    alt=""
-                    className="size-4 shrink-0 object-contain"
-                    aria-hidden
-                  />
-                }
-                label="Created on"
-                className="w-[140px]"
-              />
-              <HeaderCell
-                icon={
-                  <img
-                    src="/icons/subscriptions/credit-card.svg"
-                    alt=""
-                    className="size-4 shrink-0 object-contain"
-                    aria-hidden
-                  />
-                }
-                label="Amount"
-                className="w-[100px]"
-              />
-              <HeaderCell
-                icon={
-                  <img
-                    src="/icons/subscriptions/flag.svg"
-                    alt=""
-                    className="size-4 shrink-0 object-contain"
-                    aria-hidden
-                  />
-                }
-                label="Status"
-                className="w-[140px]"
-              />
-              <th
-                scope="col"
-                className="sticky top-0 z-20 h-9 w-12 border-b border-[#d0d5dd] bg-[#f2f4f7] px-2 text-center align-middle [transform:translate3d(0,0,0)]"
-              >
-                <button
-                  type="button"
-                  className="inline-flex size-8 items-center justify-center rounded text-[#667085] hover:bg-slate-200/80"
-                  aria-label="Table actions"
-                >
-                  <img
-                    src="/icons/subscriptions/highlight-mouse-cursor.svg"
-                    alt=""
-                    className="size-4 shrink-0 object-contain"
-                    aria-hidden
-                  />
-                </button>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {slice.map((row) => (
-              <tr key={row.id} className="hover:bg-slate-50/80">
-                <td className="h-9 border-b border-r border-[#d0d5dd] px-3 align-middle text-base font-medium leading-6 text-[#475467]">
-                  {row.provider}
-                </td>
-                <td className="h-9 border-b border-r border-[#d0d5dd] px-3 align-middle">
-                  <CustomerCell customer={row.customer} />
-                </td>
-                <td className="h-9 border-b border-r border-[#d0d5dd] px-3 align-middle">
-                  <div className="flex min-w-0 items-center gap-1">
-                    <span className="min-w-0 truncate text-base font-medium leading-6 text-[#475467]">
-                      {row.source}
-                    </span>
-                    <img
-                      src="/icons/subscriptions/share-04.svg"
-                      alt=""
-                      className="size-4 shrink-0 object-contain"
-                      aria-hidden
-                    />
-                  </div>
-                </td>
-                <td className="h-9 border-b border-r border-[#d0d5dd] px-3 align-middle text-base font-medium leading-6 text-[#475467]">
-                  {row.createdOn}
-                </td>
-                <td className="h-9 border-b border-r border-[#d0d5dd] px-3 align-middle text-base font-medium leading-6 text-[#475467]">
-                  {row.amount}
-                </td>
-                <td className="h-9 border-b border-r border-[#d0d5dd] px-3 align-middle">
-                  <StatusBadge
-                    status={
-                      pausedById[row.id] !== undefined ? "Paused" : row.status
-                    }
-                  />
-                </td>
-                <td className="h-9 border-b border-[#d0d5dd] px-3 text-right align-middle">
-                  <div className="flex justify-end">
-                    <SubscriptionRowActions
-                      customerName={row.customer.name}
-                      subscriptionId={row.id}
-                      baseStatus={row.status}
-                      displayStatus={
-                        pausedById[row.id] !== undefined ? "Paused" : row.status
+      <div className="isolate flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-[4px] border border-[#d0d5dd] bg-white">
+        {/* Horizontal scroll wraps header + body so columns stay aligned; vertical scroll is body-only (scrollbar below header). */}
+        <div className="flex min-h-0 w-full flex-1 flex-col overflow-x-auto">
+          <div className="flex min-h-0 w-full min-w-[1088px] flex-1 flex-col">
+            <div className="shrink-0">
+              <table className="w-full min-w-[1088px] table-fixed border-separate border-spacing-0 text-left">
+                <SubscriptionsTableColGroup />
+                <thead>
+                  <tr>
+                    <HeaderCell
+                      icon={
+                        <img
+                          src="/icons/subscriptions/credit-card.svg"
+                          alt=""
+                          className="size-4 shrink-0 object-contain"
+                          aria-hidden
+                        />
                       }
-                      onPauseConfirmed={(subscriptionId, previousStatus) => {
-                        setPausedById((p) => ({
-                          ...p,
-                          [subscriptionId]: previousStatus,
-                        }));
-                      }}
-                      onResume={(subscriptionId) => {
-                        setPausedById((p) => {
-                          const { [subscriptionId]: _, ...rest } = p;
-                          return rest;
-                        });
-                      }}
+                      label="Provider"
                     />
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                    <HeaderCell
+                      icon={
+                        <img
+                          src="/icons/subscriptions/account-circle.svg"
+                          alt=""
+                          className="size-4 shrink-0 object-contain"
+                          aria-hidden
+                        />
+                      }
+                      label="Customer"
+                    />
+                    <HeaderCell
+                      icon={
+                        <img
+                          src="/icons/subscriptions/highlight-mouse-cursor.svg"
+                          alt=""
+                          className="size-4 shrink-0 object-contain"
+                          aria-hidden
+                        />
+                      }
+                      label="Source"
+                    />
+                    <HeaderCell
+                      icon={
+                        <img
+                          src="/icons/subscriptions/calendar-today.svg"
+                          alt=""
+                          className="size-4 shrink-0 object-contain"
+                          aria-hidden
+                        />
+                      }
+                      label="Created on"
+                    />
+                    <HeaderCell
+                      icon={
+                        <img
+                          src="/icons/subscriptions/credit-card.svg"
+                          alt=""
+                          className="size-4 shrink-0 object-contain"
+                          aria-hidden
+                        />
+                      }
+                      label="Amount"
+                    />
+                    <HeaderCell
+                      icon={
+                        <img
+                          src="/icons/subscriptions/flag.svg"
+                          alt=""
+                          className="size-4 shrink-0 object-contain"
+                          aria-hidden
+                        />
+                      }
+                      label="Status"
+                    />
+                    <th
+                      scope="col"
+                      className="h-9 w-12 border-b border-[#d0d5dd] bg-[#f2f4f7] px-2 text-center align-middle"
+                    >
+                      <button
+                        type="button"
+                        className="inline-flex size-8 items-center justify-center rounded text-[#667085] hover:bg-slate-200/80"
+                        aria-label="Table actions"
+                      >
+                        <img
+                          src="/icons/subscriptions/highlight-mouse-cursor.svg"
+                          alt=""
+                          className="size-4 shrink-0 object-contain"
+                          aria-hidden
+                        />
+                      </button>
+                    </th>
+                  </tr>
+                </thead>
+              </table>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+              <table className="w-full min-w-[1088px] table-fixed border-separate border-spacing-0 text-left">
+                <SubscriptionsTableColGroup />
+                <tbody>
+                  {slice.map((row) => (
+                    <tr key={row.id} className="hover:bg-slate-50/80">
+                      <td className="h-9 border-b border-r border-[#d0d5dd] px-3 align-middle text-base font-medium leading-6 text-[#475467]">
+                        {row.provider}
+                      </td>
+                      <td className="h-9 border-b border-r border-[#d0d5dd] px-3 align-middle">
+                        <CustomerCell customer={row.customer} />
+                      </td>
+                      <td className="h-9 border-b border-r border-[#d0d5dd] px-3 align-middle">
+                        <div className="flex min-w-0 items-center gap-1">
+                          <span className="min-w-0 truncate text-base font-medium leading-6 text-[#475467]">
+                            {row.source}
+                          </span>
+                          <img
+                            src="/icons/subscriptions/share-04.svg"
+                            alt=""
+                            className="size-4 shrink-0 object-contain"
+                            aria-hidden
+                          />
+                        </div>
+                      </td>
+                      <td className="h-9 border-b border-r border-[#d0d5dd] px-3 align-middle text-base font-medium leading-6 text-[#475467]">
+                        {row.createdOn}
+                      </td>
+                      <td className="h-9 border-b border-r border-[#d0d5dd] px-3 align-middle text-base font-medium leading-6 text-[#475467]">
+                        {row.amount}
+                      </td>
+                      <td className="h-9 border-b border-r border-[#d0d5dd] px-3 align-middle">
+                        <StatusBadge
+                          status={
+                            canceledIds[row.id]
+                              ? "Canceled"
+                              : pausedById[row.id] !== undefined
+                                ? "Paused"
+                                : row.status
+                          }
+                        />
+                      </td>
+                      <td className="h-9 border-b border-[#d0d5dd] px-3 text-right align-middle">
+                        <div className="flex justify-end">
+                          <SubscriptionRowActions
+                            customerName={row.customer.name}
+                            subscriptionId={row.id}
+                            baseStatus={row.status}
+                            displayStatus={
+                              canceledIds[row.id]
+                                ? "Canceled"
+                                : pausedById[row.id] !== undefined
+                                  ? "Paused"
+                                  : row.status
+                            }
+                            onPauseConfirmed={(
+                              subscriptionId,
+                              previousStatus
+                            ) => {
+                              setPausedById((p) => ({
+                                ...p,
+                                [subscriptionId]: previousStatus,
+                              }));
+                            }}
+                            onResume={(subscriptionId) => {
+                              setPausedById((p) => {
+                                const { [subscriptionId]: _, ...rest } = p;
+                                return rest;
+                              });
+                            }}
+                            onCancelConfirmed={(subscriptionId) => {
+                              setCanceledIds((p) => ({
+                                ...p,
+                                [subscriptionId]: true,
+                              }));
+                              setPausedById((p) => {
+                                const { [subscriptionId]: _, ...rest } = p;
+                                return rest;
+                              });
+                            }}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="flex h-fit w-full shrink-0 flex-nowrap items-end justify-end gap-4 bg-white px-0 pt-2 pb-2 text-left">

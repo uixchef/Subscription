@@ -13,7 +13,7 @@ import {
 type CancelSubscriptionModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Fires when the user confirms cancellation; does not close the modal — close via X or footer Cancel. */
+  /** Fires when the user clicks “Yes, cancel” (parent typically closes the modal). */
   onConfirmCancel?: () => void;
 };
 
