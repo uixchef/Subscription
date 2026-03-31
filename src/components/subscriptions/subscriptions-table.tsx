@@ -1,11 +1,242 @@
 "use client";
 
-import { MoreVertical } from "lucide-react";
+import {
+  ArrowUpRight,
+  MoreVertical,
+  PauseCircle,
+  PlayCircle,
+  RefreshCw,
+  XCircle,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { CancelSubscriptionModal } from "@/components/subscriptions/cancel-subscription-modal";
+import { PauseNotificationModal } from "@/components/subscriptions/pause-notification-modal";
+import { ResumeSubscriptionModal } from "@/components/subscriptions/resume-subscription-modal";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
-export type SubscriptionStatus = "Active" | "Trailing" | "Canceled" | "Incomplete";
+const rowActionItemClass =
+  "cursor-pointer gap-2 rounded px-4 py-2 text-base font-medium leading-6 text-[#101828] focus:bg-[#f9fafb] focus:text-[#101828] data-[highlighted]:bg-[#f9fafb] data-[highlighted]:text-[#101828]";
+
+const rowActionIconClass = "size-4 shrink-0 text-[#344054]";
+
+function SubscriptionRowActions({
+  customerName,
+  subscriptionId,
+  baseStatus,
+  displayStatus,
+  onPauseConfirmed,
+  onResume,
+}: {
+  customerName: string;
+  subscriptionId: string;
+  /** Status from data (never Paused). */
+  baseStatus: SubscriptionStatus;
+  /** Effective status for badge; Paused when paused. */
+  displayStatus: SubscriptionStatus;
+  onPauseConfirmed: (
+    subscriptionId: string,
+    previousStatus: SubscriptionStatus
+  ) => void;
+  onResume: (subscriptionId: string) => void;
+}) {
+  const [pauseModalOpen, setPauseModalOpen] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [resumeModalOpen, setResumeModalOpen] = useState(false);
+
+  const itemView = (
+    <DropdownMenuItem
+      key="view"
+      className={rowActionItemClass}
+      onSelect={() => {
+        /* navigate to subscription */
+      }}
+    >
+      <ArrowUpRight className={rowActionIconClass} strokeWidth={2} aria-hidden />
+      View
+    </DropdownMenuItem>
+  );
+
+  const itemCancel = (
+    <DropdownMenuItem
+      key="cancel"
+      className={rowActionItemClass}
+      onSelect={() => {
+        setCancelModalOpen(true);
+      }}
+    >
+      <XCircle className={rowActionIconClass} strokeWidth={2} aria-hidden />
+      Cancel
+    </DropdownMenuItem>
+  );
+
+  const itemShare = (
+    <DropdownMenuItem
+      key="share"
+      className={rowActionItemClass}
+      onSelect={() => {
+        /* share link */
+      }}
+    >
+      <img
+        src="/icons/subscriptions/share-04.svg"
+        alt=""
+        className="size-4 shrink-0 object-contain"
+        aria-hidden
+      />
+      Share payment update link
+    </DropdownMenuItem>
+  );
+
+  const itemPause = (
+    <DropdownMenuItem
+      key="pause"
+      className={rowActionItemClass}
+      onSelect={() => {
+        setPauseModalOpen(true);
+      }}
+    >
+      <PauseCircle className={rowActionIconClass} strokeWidth={2} aria-hidden />
+      Pause
+    </DropdownMenuItem>
+  );
+
+  const itemResume = (
+    <DropdownMenuItem
+      key="resume"
+      className={rowActionItemClass}
+      onSelect={() => {
+        setResumeModalOpen(true);
+      }}
+    >
+      <PlayCircle className={rowActionIconClass} strokeWidth={2} aria-hidden />
+      Resume
+    </DropdownMenuItem>
+  );
+
+  const itemUpdate = (
+    <DropdownMenuItem
+      key="update"
+      className={rowActionItemClass}
+      onSelect={() => {
+        /* update */
+      }}
+    >
+      <RefreshCw className={rowActionIconClass} strokeWidth={2} aria-hidden />
+      Update
+    </DropdownMenuItem>
+  );
+
+  let menuItems: React.ReactNode;
+  switch (displayStatus) {
+    case "Canceled":
+      menuItems = itemView;
+      break;
+    case "Incomplete":
+      menuItems = (
+        <>
+          {itemView}
+          {itemCancel}
+        </>
+      );
+      break;
+    case "Scheduled":
+      menuItems = (
+        <>
+          {itemView}
+          {itemCancel}
+          {itemShare}
+          {itemUpdate}
+        </>
+      );
+      break;
+    case "Paused":
+      menuItems = (
+        <>
+          {itemView}
+          {itemCancel}
+          {itemShare}
+          {itemResume}
+          {itemUpdate}
+        </>
+      );
+      break;
+    default:
+      menuItems = (
+        <>
+          {itemView}
+          {itemCancel}
+          {itemShare}
+          {itemPause}
+          {itemUpdate}
+        </>
+      );
+  }
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              "box-border inline-flex size-6 items-center justify-center overflow-hidden rounded-[4px] p-1 text-[#667085] outline-none",
+              /* Ghost icon-only 3xs Neutral — HighRise Button (Figma / node 1164-247516) */
+              "hover:bg-[#f9fafb]",
+              "focus-visible:bg-[#f9fafb] focus-visible:shadow-[0px_1px_2px_0px_rgba(16,24,40,0.05),0px_0px_0px_4px_#f2f4f7]",
+              /* Active = menu open; must follow focus so open state wins when both apply */
+              "data-[state=open]:bg-[#f2f4f7] data-[state=open]:shadow-none"
+            )}
+            aria-label={`Actions for ${customerName}`}
+          >
+            <MoreVertical className="size-4 shrink-0" strokeWidth={2} aria-hidden />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          sideOffset={4}
+          className="w-max min-w-[240px] max-w-[min(calc(100vw-2rem),320px)] rounded-[4px] border border-[#d0d5dd] bg-white p-1 shadow-[0px_4px_8px_-2px_rgba(16,24,40,0.1),0px_2px_4px_-2px_rgba(16,24,40,0.06)]"
+        >
+          {menuItems}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <PauseNotificationModal
+        open={pauseModalOpen}
+        onOpenChange={setPauseModalOpen}
+        onConfirm={() => {
+          onPauseConfirmed(subscriptionId, baseStatus);
+          setPauseModalOpen(false);
+        }}
+      />
+      <CancelSubscriptionModal
+        open={cancelModalOpen}
+        onOpenChange={setCancelModalOpen}
+      />
+      <ResumeSubscriptionModal
+        open={resumeModalOpen}
+        onOpenChange={setResumeModalOpen}
+        onConfirmResume={() => {
+          onResume(subscriptionId);
+          setResumeModalOpen(false);
+        }}
+      />
+    </>
+  );
+}
+
+export type SubscriptionStatus =
+  | "Active"
+  | "Trailing"
+  | "Scheduled"
+  | "Canceled"
+  | "Incomplete"
+  | "Paused";
 
 export type SubscriptionRow = {
   id: string;
@@ -17,9 +248,17 @@ export type SubscriptionRow = {
   status: SubscriptionStatus;
 };
 
+/** Tag / warning — same tokens as Canceled (Subscription-2025 Figma). */
+const warningTagChipClass =
+  "h-6 min-h-[24px] max-h-[24px] justify-center rounded-[12px] px-2 py-0 leading-5";
+
+/** Tag / badge chip — Trailing, Scheduled (primary); Paused (gray) — Figma 1164:247516, 1379:127053. */
+const tagChipClass =
+  "h-6 min-h-[24px] max-h-[24px] justify-center rounded-[12px] px-2 py-0 leading-5";
+
 const statusStyles: Record<
   SubscriptionStatus,
-  { bg: string; text: string }
+  { bg: string; text: string; chip?: string }
 > = {
   Active: {
     bg: "bg-[#ecfdf3]",
@@ -28,14 +267,26 @@ const statusStyles: Record<
   Trailing: {
     bg: "bg-[#eff4ff]",
     text: "text-[#004eeb]",
+    chip: tagChipClass,
+  },
+  Scheduled: {
+    bg: "bg-[#eff4ff]",
+    text: "text-[#004eeb]",
+    chip: tagChipClass,
   },
   Canceled: {
-    bg: "bg-[#fff7ed]",
-    text: "text-[#c4320a]",
+    bg: "bg-[#fffaeb]",
+    text: "text-[#b54708]",
+    chip: warningTagChipClass,
   },
   Incomplete: {
     bg: "bg-[#fef3f2]",
     text: "text-[#b42318]",
+  },
+  Paused: {
+    bg: "bg-[#f2f4f7]",
+    text: "text-[#344054]",
+    chip: tagChipClass,
   },
 };
 
@@ -85,7 +336,8 @@ function StatusBadge({ status }: { status: SubscriptionStatus }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-[14px] font-medium",
+        "inline-flex items-center text-[14px] font-medium",
+        s.chip ?? "rounded-full px-2 py-0.5 leading-5",
         s.bg,
         s.text
       )}
@@ -128,8 +380,8 @@ const MOCK_ROWS: SubscriptionRow[] = [
     provider: "Manual",
     customer: { name: "Olivia John", avatarBg: "#f2f4f7" },
     source: "30% - 1 step order form",
-    createdOn: "30 Oct 2024",
-    amount: "$1,500",
+    createdOn: "",
+    amount: "",
     status: "Active",
   },
   {
@@ -137,8 +389,8 @@ const MOCK_ROWS: SubscriptionRow[] = [
     provider: "Stripe",
     customer: { name: "Erin Ekstrom Bothman", avatarBg: "#dbeafe" },
     source: "Annual plan — checkout",
-    createdOn: "30 Oct 2024",
-    amount: "$1,500",
+    createdOn: "",
+    amount: "",
     status: "Active",
   },
   {
@@ -146,17 +398,17 @@ const MOCK_ROWS: SubscriptionRow[] = [
     provider: "PayPal",
     customer: { name: "Madelyn Calzoni", avatarBg: "#dbc0dd" },
     source: "30% - 1 step order form",
-    createdOn: "30 Oct 2024",
-    amount: "$1,500",
-    status: "Trailing",
+    createdOn: "",
+    amount: "",
+    status: "Scheduled",
   },
   {
     id: "4",
     provider: "Square",
     customer: { name: "James Hall", avatarBg: "#dfcc9f" },
     source: "30% - 1 step order form",
-    createdOn: "30 Oct 2024",
-    amount: "$1,500",
+    createdOn: "",
+    amount: "",
     status: "Canceled",
   },
   {
@@ -164,8 +416,8 @@ const MOCK_ROWS: SubscriptionRow[] = [
     provider: "Amazon Pay",
     customer: { name: "Kris Ullman", avatarBg: "#c2c7b8" },
     source: "30% - 1 step order form",
-    createdOn: "30 Oct 2024",
-    amount: "$1,500",
+    createdOn: "",
+    amount: "",
     status: "Incomplete",
   },
   {
@@ -173,8 +425,8 @@ const MOCK_ROWS: SubscriptionRow[] = [
     provider: "Apple Pay",
     customer: { name: "Lori Bryson", avatarBg: "#d1baa9" },
     source: "30% - 1 step order form",
-    createdOn: "30 Oct 2024",
-    amount: "$1,500",
+    createdOn: "",
+    amount: "",
     status: "Active",
   },
   {
@@ -182,8 +434,8 @@ const MOCK_ROWS: SubscriptionRow[] = [
     provider: "Google Pay",
     customer: { name: "Chris Glasser", avatarBg: "#f2f4f7" },
     source: "30% - 1 step order form",
-    createdOn: "30 Oct 2024",
-    amount: "$1,500",
+    createdOn: "",
+    amount: "",
     status: "Incomplete",
   },
   {
@@ -191,8 +443,8 @@ const MOCK_ROWS: SubscriptionRow[] = [
     provider: "Venmo",
     customer: { name: "Kris Ullman", avatarBg: "#c2c7b8" },
     source: "30% - 1 step order form",
-    createdOn: "30 Oct 2024",
-    amount: "$1,500",
+    createdOn: "",
+    amount: "",
     status: "Canceled",
   },
   {
@@ -200,8 +452,8 @@ const MOCK_ROWS: SubscriptionRow[] = [
     provider: "Cash App",
     customer: { name: "Olivia John", avatarBg: "#f2f4f7" },
     source: "30% - 1 step order form",
-    createdOn: "30 Oct 2024",
-    amount: "$1,500",
+    createdOn: "",
+    amount: "",
     status: "Trailing",
   },
   {
@@ -209,8 +461,8 @@ const MOCK_ROWS: SubscriptionRow[] = [
     provider: "Zelle",
     customer: { name: "Erin Ekstrom Bothman", avatarBg: "#dbeafe" },
     source: "Annual plan — checkout",
-    createdOn: "30 Oct 2024",
-    amount: "$1,500",
+    createdOn: "",
+    amount: "",
     status: "Active",
   },
   {
@@ -218,8 +470,8 @@ const MOCK_ROWS: SubscriptionRow[] = [
     provider: "Samsung Pay",
     customer: { name: "Madelyn Calzoni", avatarBg: "#dbc0dd" },
     source: "30% - 1 step order form",
-    createdOn: "30 Oct 2024",
-    amount: "$1,500",
+    createdOn: "",
+    amount: "",
     status: "Incomplete",
   },
   {
@@ -227,11 +479,35 @@ const MOCK_ROWS: SubscriptionRow[] = [
     provider: "Dwolla",
     customer: { name: "James Hall", avatarBg: "#dfcc9f" },
     source: "30% - 1 step order form",
-    createdOn: "30 Oct 2024",
-    amount: "$1,500",
+    createdOn: "",
+    amount: "",
     status: "Canceled",
   },
 ];
+
+const CREATED_ON_STEP_DAYS = 22;
+
+/** MM/DD/YYYY: newest first — row 0 is today, each next row is CREATED_ON_STEP_DAYS earlier (no future dates). */
+function formatCreatedOnMMDDYYYY(stepsOlderThanNewest: number): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - stepsOlderThanNewest * CREATED_ON_STEP_DAYS);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${mm}/${dd}/${yyyy}`;
+}
+
+/** Unique USD per row index, e.g. $1,500.00 */
+function formatUsdUnique(index: number): string {
+  const cents = 150000 + index * 8471 + (index % 100) * 3;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(cents / 100);
+}
 
 const TOTAL_ROWS = 212;
 
@@ -254,6 +530,10 @@ function getPaginationItems(
 export function SubscriptionsTable() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
+  /** Row id → status before pause (for restoring on Resume). */
+  const [pausedById, setPausedById] = useState<
+    Record<string, SubscriptionStatus>
+  >({});
 
   const { slice, start, end } = useMemo(() => {
     const startIdx = (page - 1) * perPage;
@@ -264,6 +544,8 @@ export function SubscriptionsTable() {
       return {
         ...template,
         id: `row-${globalIdx + 1}`,
+        createdOn: formatCreatedOnMMDDYYYY(globalIdx),
+        amount: formatUsdUnique(globalIdx),
       };
     });
     return {
@@ -406,16 +688,35 @@ export function SubscriptionsTable() {
                   {row.amount}
                 </td>
                 <td className="h-9 border-b border-r border-[#d0d5dd] px-3 align-middle">
-                  <StatusBadge status={row.status} />
+                  <StatusBadge
+                    status={
+                      pausedById[row.id] !== undefined ? "Paused" : row.status
+                    }
+                  />
                 </td>
-                <td className="h-9 border-b border-[#d0d5dd] px-2 text-center align-middle">
-                  <button
-                    type="button"
-                    className="inline-flex size-8 items-center justify-center rounded text-[#667085] hover:bg-slate-100"
-                    aria-label={`Actions for ${row.customer.name}`}
-                  >
-                    <MoreVertical className="size-4" strokeWidth={2} />
-                  </button>
+                <td className="h-9 border-b border-[#d0d5dd] px-3 text-right align-middle">
+                  <div className="flex justify-end">
+                    <SubscriptionRowActions
+                      customerName={row.customer.name}
+                      subscriptionId={row.id}
+                      baseStatus={row.status}
+                      displayStatus={
+                        pausedById[row.id] !== undefined ? "Paused" : row.status
+                      }
+                      onPauseConfirmed={(subscriptionId, previousStatus) => {
+                        setPausedById((p) => ({
+                          ...p,
+                          [subscriptionId]: previousStatus,
+                        }));
+                      }}
+                      onResume={(subscriptionId) => {
+                        setPausedById((p) => {
+                          const { [subscriptionId]: _, ...rest } = p;
+                          return rest;
+                        });
+                      }}
+                    />
+                  </div>
                 </td>
               </tr>
             ))}
