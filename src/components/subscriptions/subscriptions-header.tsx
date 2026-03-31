@@ -37,7 +37,7 @@ export function SubscriptionsHeader() {
             className="h-auto gap-2 rounded border border-[#155eef] bg-[#155eef] px-2.5 py-1.5 text-base font-semibold text-white shadow-[0_1px_2px_rgba(16,24,40,0.05)] hover:bg-[#155eef]/90"
           >
             <Plus className="size-4 shrink-0" strokeWidth={2} />
-            Add subscription
+            Create subscription
           </Button>
         </div>
       </div>

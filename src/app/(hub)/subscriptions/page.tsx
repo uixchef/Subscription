@@ -14,9 +14,9 @@ export default function SubscriptionsPage() {
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <SubscriptionsHeader />
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4">
-        <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-3 overflow-hidden rounded-[12px] bg-white px-4 pt-4 pb-2 shadow-[0_12px_16px_-4px_rgba(16,24,40,0.08),0_4px_6px_-2px_rgba(16,24,40,0.03)]">
+        <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-3 overflow-hidden rounded-[var(--border-radius-3)] bg-[var(--color-neutral-white-base)] px-4 pt-4 pb-4 shadow-[var(--shadow-lg)]">
           <SubscriptionsToolbar />
-          <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <SubscriptionsTable />
           </div>
         </div>

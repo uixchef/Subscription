@@ -92,6 +92,12 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* Payment Hub content surface (Figma: border-radius-3, neutral white, Shadow/lg) */
+  --border-radius-3: 12px;
+  --color-neutral-white-base: #fff;
+  --shadow-lg: 0 12px 16px -4px rgba(16, 24, 40, 0.08),
+    0 4px 6px -2px rgba(16, 24, 40, 0.03);
 }
 
 .dark {
@@ -145,5 +151,19 @@ nextjs-portal {
   }
   body {
     @apply bg-background text-foreground font-sans;
+  }
+
+  /* CTAs: pointer on interactive controls; disabled stays not-allowed */
+  a[href]:not([aria-disabled="true"]) {
+    @apply cursor-pointer;
+  }
+  button:not(:disabled) {
+    @apply cursor-pointer;
+  }
+  button:disabled {
+    @apply cursor-not-allowed;
+  }
+  select:not(:disabled) {
+    @apply cursor-pointer;
   }
 }

@@ -586,7 +586,7 @@ export function SubscriptionsTable() {
   );
 
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col items-start justify-start gap-0 overflow-hidden bg-white">
+    <div className="flex min-h-0 w-full flex-1 flex-col items-start justify-start gap-0 bg-white">
       <div className="isolate flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-[4px] border border-[#d0d5dd] bg-white">
         {/* Horizontal scroll wraps header + body so columns stay aligned; vertical scroll is body-only (scrollbar below header). */}
         <div className="flex min-h-0 w-full flex-1 flex-col overflow-x-auto">
@@ -683,7 +683,7 @@ export function SubscriptionsTable() {
                 </thead>
               </table>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+            <div className="min-h-0 w-full flex-1 overflow-y-auto overflow-x-visible [scrollbar-gutter:stable]">
               <table className="w-full min-w-[1088px] table-fixed border-separate border-spacing-0 text-left">
                 <SubscriptionsTableColGroup />
                 <tbody>
@@ -725,8 +725,8 @@ export function SubscriptionsTable() {
                           }
                         />
                       </td>
-                      <td className="h-9 border-b border-[#d0d5dd] px-3 text-right align-middle">
-                        <div className="flex justify-end">
+                      <td className="h-9 border-b border-[#d0d5dd] px-3 text-center align-middle">
+                        <div className="flex justify-center">
                           <SubscriptionRowActions
                             customerName={row.customer.name}
                             subscriptionId={row.id}
