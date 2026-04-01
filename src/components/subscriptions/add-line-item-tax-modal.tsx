@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, Check, X } from "lucide-react";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useHubToast } from "@/components/payment-hub/hub-toast";
 import { figmaFieldFocusTransition, figmaFieldFocusVisible } from "@/components/subscriptions/figma-field-focus";
@@ -151,7 +151,6 @@ export function AddLineItemTaxModal({
   onSave,
 }: AddLineItemTaxModalProps) {
   const { showSuccess } = useHubToast();
-  const titleId = useId();
   const [mode, setMode] = useState<TaxMode>("manual");
   const [taxPage, setTaxPage] = useState(1);
   const [taxPerPage, setTaxPerPage] = useState(10);
@@ -272,16 +271,12 @@ export function AddLineItemTaxModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        aria-labelledby={titleId}
         className="z-[200] flex max-h-[min(90vh,calc(100vh-2rem))] w-full max-w-[min(600px,calc(100vw-2rem))] flex-col gap-0 overflow-hidden border border-[#f2f4f7] bg-white p-0 shadow-[0px_20px_24px_-4px_rgba(16,24,40,0.08),0px_8px_8px_-4px_rgba(16,24,40,0.03)] sm:max-w-[min(600px,calc(100vw-2rem))] sm:rounded-lg"
       >
         <div className="flex shrink-0 flex-col px-4 pt-4">
           <div className="flex w-full items-start gap-2">
             <div className="min-w-0 flex-1">
-              <DialogTitle
-                id={titleId}
-                className="text-base font-semibold leading-6 text-[#101828]"
-              >
+              <DialogTitle className="text-base font-semibold leading-6 text-[#101828]">
                 {dialogTitle}
               </DialogTitle>
             </div>

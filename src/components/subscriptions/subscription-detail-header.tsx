@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
  * (back + "Subscription details" + Live / Test mode badge).
  *
  * Live: same success tokens as Active status (`bg-[#ecfdf3]`, `text-[#027a48]`).
- * Test: same surface as Canceled banner rail (`bg-[#fffaeb]`, `text-[#b54708]`, border `#eaecf0`).
+ * Test: same surface as Canceled banner rail (`bg-[#fffaeb]`, `text-[#b54708]`).
  */
 export function SubscriptionDetailHeader({
   paymentMode,
@@ -34,10 +34,10 @@ export function SubscriptionDetailHeader({
         </Link>
         <span
           className={cn(
-            "inline-flex h-6 min-h-6 max-h-6 items-center justify-center rounded-[12px] border border-solid px-2 text-sm font-medium leading-5",
+            "inline-flex h-6 min-h-6 max-h-6 items-center justify-center rounded-[12px] px-2 text-sm font-medium leading-5",
             isLive
-              ? "border-[#eaecf0] bg-[#ecfdf3] text-[#027a48]"
-              : "border-[#eaecf0] bg-[#fffaeb] text-[#b54708]"
+              ? "bg-[#ecfdf3] text-[#027a48]"
+              : "bg-[#fffaeb] text-[#b54708]"
           )}
         >
           {isLive ? "Live mode" : "Test mode"}
