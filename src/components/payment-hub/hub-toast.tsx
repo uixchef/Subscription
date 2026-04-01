@@ -29,7 +29,7 @@ type HubToastContextValue = {
 
 const HubToastContext = createContext<HubToastContextValue | null>(null);
 
-const TOAST_MS = 4500;
+const TOAST_MS = 5000;
 
 /**
  * Figma Alert (node 1399:35444) — error: bg/border/text from Secondary/Error tokens.

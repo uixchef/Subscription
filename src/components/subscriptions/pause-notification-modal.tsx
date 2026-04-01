@@ -63,11 +63,7 @@ export function PauseNotificationModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="w-full max-w-[min(576px,calc(100vw-2rem))] gap-0 overflow-hidden p-0 sm:max-w-[min(576px,calc(100vw-2rem))]"
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-      >
+      <DialogContent className="w-full max-w-[min(576px,calc(100vw-2rem))] gap-0 overflow-hidden p-0 sm:max-w-[min(576px,calc(100vw-2rem))]">
         {/* Modal header — title + subtitle */}
         <div className="flex flex-col px-4 pt-3 pb-0">
           <div className="flex w-full items-start gap-2">

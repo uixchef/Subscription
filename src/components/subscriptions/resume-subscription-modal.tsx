@@ -24,11 +24,7 @@ export function ResumeSubscriptionModal({
 }: ResumeSubscriptionModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="w-full max-w-[min(483px,calc(100vw-2rem))] gap-0 overflow-hidden p-0 sm:max-w-[min(483px,calc(100vw-2rem))]"
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-      >
+      <DialogContent className="w-full max-w-[min(483px,calc(100vw-2rem))] gap-0 overflow-hidden p-0 sm:max-w-[min(483px,calc(100vw-2rem))]">
         <div className="flex flex-col px-4 pt-3 pb-0">
           <div className="flex w-full items-start gap-2">
             <DialogTitle className="min-w-0 flex-1 text-base font-semibold leading-6 text-[#101828]">

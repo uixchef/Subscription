@@ -2,12 +2,17 @@
 
 import Link from "next/link";
 import { Download, Plus } from "lucide-react";
+import { useState } from "react";
 
 import { useHubToast } from "@/components/payment-hub/hub-toast";
+import { CreateSubscriptionModal } from "@/components/subscriptions/create-subscription-modal";
 import { Button } from "@/components/ui/button";
 
 export function SubscriptionsHeader() {
-  const { showSuccess } = useHubToast();
+  const { showError } = useHubToast();
+  const [createOpen, setCreateOpen] = useState(false);
+  /** New instance each open so the form always starts from defaults (avoids stale state). */
+  const [createModalKey, setCreateModalKey] = useState(0);
 
   return (
     <div className="flex h-fit w-full min-w-0 shrink-0 items-center border-b border-[#d0d5dd] bg-white px-4 pb-2 pt-2">
@@ -34,7 +39,9 @@ export function SubscriptionsHeader() {
             variant="outline"
             className="h-auto gap-2 rounded border-[#d0d5dd] bg-white px-2.5 py-1.5 text-base font-semibold text-[#344054] shadow-[0_1px_2px_rgba(16,24,40,0.05)] hover:bg-slate-50"
             onClick={() =>
-              showSuccess("Your CSV import has started. We’ll email you when it’s done.")
+              showError(
+                "CSV import isn’t available yet. This flow is still in progress. Please try again in two to three days."
+              )
             }
           >
             <Download className="size-4 shrink-0" strokeWidth={2} />
@@ -43,15 +50,21 @@ export function SubscriptionsHeader() {
           <Button
             type="button"
             className="h-auto gap-2 rounded border border-[#155eef] bg-[#155eef] px-2.5 py-1.5 text-base font-semibold text-white shadow-[0_1px_2px_rgba(16,24,40,0.05)] hover:bg-[#155eef]/90"
-            onClick={() =>
-              showSuccess("Create subscription flow will open here.")
-            }
+            onClick={() => {
+              setCreateModalKey((k) => k + 1);
+              setCreateOpen(true);
+            }}
           >
             <Plus className="size-4 shrink-0" strokeWidth={2} />
             Create subscription
           </Button>
         </div>
       </div>
+      <CreateSubscriptionModal
+        key={createModalKey}
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+      />
     </div>
   );
 }
