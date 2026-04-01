@@ -8,9 +8,10 @@ import {
   ChevronsLeft,
   ChevronsRight,
 } from "lucide-react";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useId, useMemo, useState } from "react";
 
 import { figmaFieldFocusVisible } from "@/components/subscriptions/figma-field-focus";
+import { getDatePartsMMDDYYYY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 
 const WEEK = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
@@ -66,14 +67,6 @@ function buildMonthGrid(visibleYear: number, visibleMonth: number) {
   return cells;
 }
 
-/** Display tokens for MM/DD/YYYY (US). */
-function formatMmDdYyyy(d: Date) {
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  return { mm, dd, yyyy };
-}
-
 type PanelView = "day" | "monthYear";
 
 export type FigmaDatePickerFieldProps = {
@@ -99,48 +92,39 @@ export function FigmaDatePickerField({
 }: FigmaDatePickerFieldProps) {
   const autoId = useId();
   const triggerId = id ?? autoId;
-  const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [panelView, setPanelView] = useState<PanelView>("day");
   const [cursor, setCursor] = useState(() => new Date(value));
+  const [pendingDate, setPendingDate] = useState(() => startOfDay(value));
   const [pendingMonth, setPendingMonth] = useState(value.getMonth());
   const [pendingYear, setPendingYear] = useState(value.getFullYear());
 
   const syncPickerFromValue = useCallback(() => {
-    setCursor(new Date(value));
+    const d = startOfDay(value);
+    setCursor(new Date(d));
+    setPendingDate(d);
     setPanelView("day");
-    setPendingMonth(value.getMonth());
-    setPendingYear(value.getFullYear());
+    setPendingMonth(d.getMonth());
+    setPendingYear(d.getFullYear());
   }, [value]);
 
+  /** Opens from trigger only; closing is via Cancel / Confirm inside the dialog. */
   const handleTriggerClick = () => {
-    if (open) {
-      setOpen(false);
-    } else {
-      syncPickerFromValue();
-      setOpen(true);
-    }
+    if (open) return;
+    syncPickerFromValue();
+    setOpen(true);
   };
 
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  const closeWithoutSave = () => {
+    setOpen(false);
+  };
 
-  const display = formatMmDdYyyy(value);
+  const confirmDayView = () => {
+    onChange(pendingDate);
+    setOpen(false);
+  };
+
+  const display = getDatePartsMMDDYYYY(value);
   const today = useMemo(() => startOfDay(new Date()), []);
   const grid = useMemo(
     () => buildMonthGrid(cursor.getFullYear(), cursor.getMonth()),
@@ -156,18 +140,19 @@ export function FigmaDatePickerField({
 
   const applyMonthYear = () => {
     const dim = new Date(pendingYear, pendingMonth + 1, 0).getDate();
-    const day = Math.min(value.getDate(), dim);
-    setCursor(new Date(pendingYear, pendingMonth, day));
+    const day = Math.min(pendingDate.getDate(), dim);
+    const next = startOfDay(new Date(pendingYear, pendingMonth, day));
+    setCursor(next);
+    setPendingDate(next);
     setPanelView("day");
   };
 
   const selectDay = (d: Date) => {
-    onChange(startOfDay(d));
-    setOpen(false);
+    setPendingDate(startOfDay(d));
   };
 
   return (
-    <div ref={rootRef} className={cn("relative w-full", className)}>
+    <div className={cn("relative w-full", className)}>
       <button
         type="button"
         id={triggerId}
@@ -290,7 +275,7 @@ export function FigmaDatePickerField({
               <div className="grid w-full grid-cols-7 gap-1">
                 {grid.map(({ date, inMonth }) => {
                   const isToday = sameDay(date, today);
-                  const isSelected = sameDay(date, value);
+                  const isSelected = sameDay(date, pendingDate);
                   const label = date.getDate();
                   return (
                     <button
@@ -321,14 +306,14 @@ export function FigmaDatePickerField({
                 <button
                   type="button"
                   className="h-8 flex-1 rounded border border-[#d0d5dd] bg-white text-sm font-semibold leading-5 text-[#344054] shadow-[0px_1px_2px_0px_rgba(16,24,40,0.05)] hover:bg-slate-50"
-                  onClick={() => setOpen(false)}
+                  onClick={closeWithoutSave}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   className="h-8 flex-1 rounded border border-[#155eef] bg-[#155eef] text-sm font-semibold leading-5 text-white shadow-[0px_1px_2px_0px_rgba(16,24,40,0.05)] hover:bg-[#004eeb]"
-                  onClick={() => setOpen(false)}
+                  onClick={confirmDayView}
                 >
                   Confirm
                 </button>

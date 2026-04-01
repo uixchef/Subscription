@@ -45,7 +45,7 @@ const navGroupAfterPayments = [
   { label: "Reputation", file: "star-01.svg" },
   { label: "Reporting", file: "line-chart-up-02.svg" },
   { label: "App marketplace", file: "grid-01.svg" },
-  { label: "Mobile App", file: "tablet_mac.svg" },
+  { label: "Mobile app", file: "tablet_mac.svg" },
 ];
 
 function SidebarNavIcon({ file, active }: { file: string; active?: boolean }) {

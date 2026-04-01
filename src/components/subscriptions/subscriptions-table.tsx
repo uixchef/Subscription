@@ -8,20 +8,38 @@ import {
   RefreshCw,
   XCircle,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 
 import { useHubToast } from "@/components/payment-hub/hub-toast";
 import { CancelSubscriptionModal } from "@/components/subscriptions/cancel-subscription-modal";
 import { PauseNotificationModal } from "@/components/subscriptions/pause-notification-modal";
+import {
+  PAUSE_SUBSCRIPTION_ERROR_MESSAGE,
+  pauseSubscriptionRequest,
+  pauseSubscriptionSuccessMessage,
+} from "@/components/subscriptions/pause-subscription-messages";
 import { ResumeSubscriptionModal } from "@/components/subscriptions/resume-subscription-modal";
 import { figmaFieldFocusVisible } from "@/components/subscriptions/figma-field-focus";
 import { SUBSCRIPTION_TOTAL_ROWS } from "@/components/subscriptions/subscriptions-constants";
+import {
+  buildSubscriptionRow,
+  type SubscriptionRow,
+  type SubscriptionStatus,
+} from "@/components/subscriptions/subscription-row-model";
+import {
+  loadSubscriptionUiOverrides,
+  saveSubscriptionUiOverrides,
+  subscribeSubscriptionUiOverrides,
+} from "@/components/subscriptions/subscription-ui-overrides";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { getPaginationItems } from "@/components/subscriptions/pagination-utils";
+import { hubFeatureUnavailableMessage } from "@/lib/hub-feature-unavailable-message";
 import { cn } from "@/lib/utils";
 
 const rowActionItemClass =
@@ -89,15 +107,14 @@ function SubscriptionRowActions({
   const { showSuccess, showError } = useHubToast();
 
   const itemView = (
-    <DropdownMenuItem
-      key="view"
-      className={rowActionItemClass}
-      onSelect={() => {
-        showSuccess("Opening subscription…");
-      }}
-    >
-      <ArrowUpRight className={rowActionIconClass} strokeWidth={2} aria-hidden />
-      View
+    <DropdownMenuItem asChild key="view" className={rowActionItemClass}>
+      <Link
+        href={`/subscriptions/${subscriptionId}`}
+        className="flex cursor-pointer items-center gap-2 outline-none"
+      >
+        <ArrowUpRight className={rowActionIconClass} strokeWidth={2} aria-hidden />
+        View
+      </Link>
     </DropdownMenuItem>
   );
 
@@ -119,14 +136,9 @@ function SubscriptionRowActions({
       key="share"
       className={rowActionItemClass}
       onSelect={() => {
-        void (async () => {
-          try {
-            await navigator.clipboard.writeText(window.location.href);
-            showSuccess("Payment update link copied to clipboard");
-          } catch {
-            showError("Couldn’t copy link. Try again.");
-          }
-        })();
+        showError(
+          hubFeatureUnavailableMessage("Share payment update link")
+        );
       }}
     >
       <img
@@ -170,7 +182,7 @@ function SubscriptionRowActions({
       key="update"
       className={rowActionItemClass}
       onSelect={() => {
-        showSuccess("Subscription update started");
+        showError(hubFeatureUnavailableMessage("Update subscription"));
       }}
     >
       <RefreshCw className={rowActionIconClass} strokeWidth={2} aria-hidden />
@@ -254,10 +266,15 @@ function SubscriptionRowActions({
       <PauseNotificationModal
         open={pauseModalOpen}
         onOpenChange={setPauseModalOpen}
-        onConfirm={() => {
-          onPauseConfirmed(subscriptionId, baseStatus);
-          setPauseModalOpen(false);
-          showSuccess("Subscription paused");
+        onConfirm={async (payload) => {
+          try {
+            await pauseSubscriptionRequest(payload);
+            onPauseConfirmed(subscriptionId, baseStatus);
+            setPauseModalOpen(false);
+            showSuccess(pauseSubscriptionSuccessMessage(payload));
+          } catch {
+            showError(PAUSE_SUBSCRIPTION_ERROR_MESSAGE);
+          }
         }}
       />
       <CancelSubscriptionModal
@@ -281,24 +298,6 @@ function SubscriptionRowActions({
     </>
   );
 }
-
-export type SubscriptionStatus =
-  | "Active"
-  | "Trailing"
-  | "Scheduled"
-  | "Canceled"
-  | "Incomplete"
-  | "Paused";
-
-export type SubscriptionRow = {
-  id: string;
-  provider: string;
-  customer: { name: string; avatarBg?: string };
-  source: string;
-  createdOn: string;
-  amount: string;
-  status: SubscriptionStatus;
-};
 
 /** Tag / warning — same tokens as Canceled (Subscription-2025 Figma). */
 const warningTagChipClass =
@@ -342,7 +341,7 @@ const statusStyles: Record<
   },
 };
 
-function HeaderCell({
+export function SubscriptionsTableHeaderCell({
   icon,
   label,
   className,
@@ -431,157 +430,6 @@ function CustomerCell({
   );
 }
 
-const MOCK_ROWS: SubscriptionRow[] = [
-  {
-    id: "1",
-    provider: "Manual",
-    customer: { name: "Olivia John", avatarBg: "#f2f4f7" },
-    source: "30% - 1 step order form",
-    createdOn: "",
-    amount: "",
-    status: "Active",
-  },
-  {
-    id: "2",
-    provider: "Stripe",
-    customer: { name: "Erin Ekstrom Bothman", avatarBg: "#dbeafe" },
-    source: "Annual plan — checkout",
-    createdOn: "",
-    amount: "",
-    status: "Active",
-  },
-  {
-    id: "3",
-    provider: "PayPal",
-    customer: { name: "Madelyn Calzoni", avatarBg: "#dbc0dd" },
-    source: "30% - 1 step order form",
-    createdOn: "",
-    amount: "",
-    status: "Scheduled",
-  },
-  {
-    id: "4",
-    provider: "Square",
-    customer: { name: "James Hall", avatarBg: "#dfcc9f" },
-    source: "30% - 1 step order form",
-    createdOn: "",
-    amount: "",
-    status: "Canceled",
-  },
-  {
-    id: "5",
-    provider: "Amazon Pay",
-    customer: { name: "Kris Ullman", avatarBg: "#c2c7b8" },
-    source: "30% - 1 step order form",
-    createdOn: "",
-    amount: "",
-    status: "Incomplete",
-  },
-  {
-    id: "6",
-    provider: "Apple Pay",
-    customer: { name: "Lori Bryson", avatarBg: "#d1baa9" },
-    source: "30% - 1 step order form",
-    createdOn: "",
-    amount: "",
-    status: "Active",
-  },
-  {
-    id: "7",
-    provider: "Google Pay",
-    customer: { name: "Chris Glasser", avatarBg: "#f2f4f7" },
-    source: "30% - 1 step order form",
-    createdOn: "",
-    amount: "",
-    status: "Incomplete",
-  },
-  {
-    id: "8",
-    provider: "Venmo",
-    customer: { name: "Kris Ullman", avatarBg: "#c2c7b8" },
-    source: "30% - 1 step order form",
-    createdOn: "",
-    amount: "",
-    status: "Canceled",
-  },
-  {
-    id: "9",
-    provider: "Cash App",
-    customer: { name: "Olivia John", avatarBg: "#f2f4f7" },
-    source: "30% - 1 step order form",
-    createdOn: "",
-    amount: "",
-    status: "Trailing",
-  },
-  {
-    id: "10",
-    provider: "Zelle",
-    customer: { name: "Erin Ekstrom Bothman", avatarBg: "#dbeafe" },
-    source: "Annual plan — checkout",
-    createdOn: "",
-    amount: "",
-    status: "Active",
-  },
-  {
-    id: "11",
-    provider: "Samsung Pay",
-    customer: { name: "Madelyn Calzoni", avatarBg: "#dbc0dd" },
-    source: "30% - 1 step order form",
-    createdOn: "",
-    amount: "",
-    status: "Incomplete",
-  },
-  {
-    id: "12",
-    provider: "Dwolla",
-    customer: { name: "James Hall", avatarBg: "#dfcc9f" },
-    source: "30% - 1 step order form",
-    createdOn: "",
-    amount: "",
-    status: "Canceled",
-  },
-];
-
-const CREATED_ON_STEP_DAYS = 22;
-
-/** MM/DD/YYYY: newest first — row 0 is today, each next row is CREATED_ON_STEP_DAYS earlier (no future dates). */
-function formatCreatedOnMMDDYYYY(stepsOlderThanNewest: number): string {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - stepsOlderThanNewest * CREATED_ON_STEP_DAYS);
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  return `${mm}/${dd}/${yyyy}`;
-}
-
-/** Unique USD per row index, e.g. $1,500.00 */
-function formatUsdUnique(index: number): string {
-  const cents = 150000 + index * 8471 + (index % 100) * 3;
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(cents / 100);
-}
-
-function getPaginationItems(
-  current: number,
-  total: number
-): (number | "ellipsis")[] {
-  if (total <= 7) {
-    return Array.from({ length: total }, (_, i) => i + 1);
-  }
-  if (current <= 4) {
-    return [1, 2, 3, 4, 5, "ellipsis", total];
-  }
-  if (current >= total - 3) {
-    return [1, "ellipsis", total - 4, total - 3, total - 2, total - 1, total];
-  }
-  return [1, "ellipsis", current - 1, current, current + 1, "ellipsis", total];
-}
-
 function SubscriptionsTableEmptyState() {
   return (
     <div
@@ -617,6 +465,28 @@ export function SubscriptionsTable() {
   >({});
   /** Locally canceled rows (badge → Canceled until refresh). */
   const [canceledIds, setCanceledIds] = useState<Record<string, boolean>>({});
+  const [overridesHydrated, setOverridesHydrated] = useState(false);
+
+  useEffect(() => {
+    const o = loadSubscriptionUiOverrides();
+    setPausedById(o.pausedById);
+    setCanceledIds(o.canceledIds);
+    setOverridesHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!overridesHydrated) return;
+    saveSubscriptionUiOverrides({ pausedById, canceledIds });
+  }, [overridesHydrated, pausedById, canceledIds]);
+
+  /** Detail page / other tabs update sessionStorage — keep table in sync. */
+  useEffect(() => {
+    return subscribeSubscriptionUiOverrides(() => {
+      const o = loadSubscriptionUiOverrides();
+      setPausedById(o.pausedById);
+      setCanceledIds(o.canceledIds);
+    });
+  }, []);
 
   const { slice, start, end } = useMemo(() => {
     const startIdx = (page - 1) * perPage;
@@ -626,13 +496,7 @@ export function SubscriptionsTable() {
     );
     const slice = Array.from({ length: rowCount }, (_, i) => {
       const globalIdx = startIdx + i;
-      const template = MOCK_ROWS[globalIdx % MOCK_ROWS.length];
-      return {
-        ...template,
-        id: `row-${globalIdx + 1}`,
-        createdOn: formatCreatedOnMMDDYYYY(globalIdx),
-        amount: formatUsdUnique(globalIdx),
-      };
+      return buildSubscriptionRow(globalIdx);
     });
     return {
       slice,
@@ -677,7 +541,7 @@ export function SubscriptionsTable() {
                 />
                 <thead>
                   <tr>
-                    <HeaderCell
+                    <SubscriptionsTableHeaderCell
                       showFilterButton={!isEmptyTable}
                       icon={
                         <img
@@ -689,7 +553,7 @@ export function SubscriptionsTable() {
                       }
                       label="Provider"
                     />
-                    <HeaderCell
+                    <SubscriptionsTableHeaderCell
                       showFilterButton={!isEmptyTable}
                       icon={
                         <img
@@ -701,7 +565,7 @@ export function SubscriptionsTable() {
                       }
                       label="Customer"
                     />
-                    <HeaderCell
+                    <SubscriptionsTableHeaderCell
                       showFilterButton={!isEmptyTable}
                       icon={
                         <img
@@ -713,7 +577,7 @@ export function SubscriptionsTable() {
                       }
                       label="Source"
                     />
-                    <HeaderCell
+                    <SubscriptionsTableHeaderCell
                       showFilterButton={!isEmptyTable}
                       icon={
                         <img
@@ -725,7 +589,7 @@ export function SubscriptionsTable() {
                       }
                       label="Created on"
                     />
-                    <HeaderCell
+                    <SubscriptionsTableHeaderCell
                       showFilterButton={!isEmptyTable}
                       icon={
                         <img
@@ -737,7 +601,7 @@ export function SubscriptionsTable() {
                       }
                       label="Amount"
                     />
-                    <HeaderCell
+                    <SubscriptionsTableHeaderCell
                       showFilterButton={!isEmptyTable}
                       icon={
                         <img

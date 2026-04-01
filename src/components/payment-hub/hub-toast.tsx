@@ -29,7 +29,7 @@ type HubToastContextValue = {
 
 const HubToastContext = createContext<HubToastContextValue | null>(null);
 
-export const HUB_TOAST_DURATION_MS = 5000;
+export const HUB_TOAST_DURATION_MS = 3000;
 
 /** Figma modal overlay — Alert from top of viewport (Subscription-2025, e.g. node 1422:260829). */
 export const MODAL_OVERLAY_TOAST_TOP_PX = 52;

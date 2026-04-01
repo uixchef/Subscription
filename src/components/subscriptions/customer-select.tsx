@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ChevronDown, Plus } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import {
   DropdownMenu,
@@ -9,6 +9,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenuSearchField,
+  DropdownMenuSearchFooter,
+  DropdownMenuSearchScrollArea,
+  SEARCHABLE_DROPDOWN_MENU_CONTENT_CLASS,
+} from "@/components/ui/dropdown-menu-search-panel";
 import { figmaFieldFocusVisible } from "@/components/subscriptions/figma-field-focus";
 import {
   CUSTOMER_DEMO_PROFILES,
@@ -68,15 +74,32 @@ export function CustomerSelect({
   onValueChange,
   onAddCustomer,
 }: CustomerSelectProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+
   const selected = useMemo(
     () => CUSTOMERS.find((c) => c.id === value),
     [value]
   );
 
+  const filteredCustomers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return CUSTOMERS;
+    return CUSTOMERS.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.email.toLowerCase().includes(q)
+    );
+  }, [searchQuery]);
+
   const label = selected?.name ?? "Select customer";
 
   return (
-    <DropdownMenu modal={false}>
+    <DropdownMenu
+      modal={false}
+      onOpenChange={(open) => {
+        if (!open) setSearchQuery("");
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <button
           type="button"
@@ -99,57 +122,68 @@ export function CustomerSelect({
       <DropdownMenuContent
         align="start"
         sideOffset={4}
-        className={cn(
-          "z-[200] w-[320px] max-w-[min(320px,calc(100vw-2rem))] overflow-hidden rounded border border-[#d0d5dd] bg-white p-0 shadow-[0px_12px_16px_-4px_rgba(16,24,40,0.08),0px_4px_6px_-2px_rgba(16,24,40,0.03)]"
-        )}
+        className={SEARCHABLE_DROPDOWN_MENU_CONTENT_CLASS}
       >
-        <DropdownMenuItem
-          className="cursor-pointer justify-start gap-2 rounded-none px-4 py-2 text-base font-semibold leading-6 text-[#004eeb] data-[highlighted]:bg-[#f9fafb] data-[highlighted]:text-[#004eeb]"
-          onSelect={() => onAddCustomer?.()}
-        >
-          <Plus className="size-5 shrink-0" strokeWidth={2} aria-hidden />
-          Add customer
-        </DropdownMenuItem>
-        <div className="h-px w-full bg-[#d0d5dd]" role="separator" />
-        <div className="max-h-[min(356px,calc(100vh-12rem))] overflow-y-auto overflow-x-hidden py-1">
-          {CUSTOMERS.map((c) => {
-            const isSelected = c.id === value;
-            return (
-              <DropdownMenuItem
-                key={c.id}
-                selected={isSelected}
-                className="cursor-pointer rounded-none border-0 px-4 py-2 text-left text-base font-medium shadow-none"
-                onSelect={() => onValueChange(c.id)}
-              >
-                <div className="flex w-full min-w-0 items-center gap-2 rounded-md">
-                  <CustomerAvatar option={c} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <p
-                        className={cn(
-                          "truncate text-base leading-6 text-[#101828]",
-                          isSelected ? "font-semibold" : "font-medium"
-                        )}
-                      >
-                        {c.name}
+        <DropdownMenuSearchField
+          inputId={id ? `${id}-search` : undefined}
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Search"
+        />
+        <DropdownMenuSearchScrollArea>
+          {filteredCustomers.length === 0 ? (
+            <div className="px-4 py-3 text-sm leading-5 text-[#667085]">
+              No customers match your search.
+            </div>
+          ) : (
+            filteredCustomers.map((c) => {
+              const isSelected = c.id === value;
+              return (
+                <DropdownMenuItem
+                  key={c.id}
+                  selected={isSelected}
+                  className="cursor-pointer rounded-none border-0 px-4 py-2 text-left text-base font-medium shadow-none"
+                  onSelect={() => onValueChange(c.id)}
+                >
+                  <div className="flex w-full min-w-0 items-center gap-2 rounded-md">
+                    <CustomerAvatar option={c} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <p
+                          className={cn(
+                            "truncate text-base leading-6 text-[#101828]",
+                            isSelected ? "font-semibold" : "font-medium"
+                          )}
+                        >
+                          {c.name}
+                        </p>
+                      </div>
+                      <p className="truncate text-sm font-normal leading-5 text-[#475467]">
+                        {c.email}
                       </p>
                     </div>
-                    <p className="truncate text-sm font-normal leading-5 text-[#475467]">
-                      {c.email}
-                    </p>
+                    {isSelected ? (
+                      <Check
+                        className="size-4 shrink-0 text-[#155eef]"
+                        strokeWidth={2}
+                        aria-hidden
+                      />
+                    ) : null}
                   </div>
-                  {isSelected ? (
-                    <Check
-                      className="size-4 shrink-0 text-[#155eef]"
-                      strokeWidth={2}
-                      aria-hidden
-                    />
-                  ) : null}
-                </div>
-              </DropdownMenuItem>
-            );
-          })}
-        </div>
+                </DropdownMenuItem>
+              );
+            })
+          )}
+        </DropdownMenuSearchScrollArea>
+        <DropdownMenuSearchFooter>
+          <DropdownMenuItem
+            className="cursor-pointer justify-start gap-2 rounded-none px-4 py-2 text-base font-semibold leading-6 text-[#004eeb] data-[highlighted]:bg-[#f9fafb] data-[highlighted]:text-[#004eeb]"
+            onSelect={() => onAddCustomer?.()}
+          >
+            <Plus className="size-5 shrink-0" strokeWidth={2} aria-hidden />
+            Add customer
+          </DropdownMenuItem>
+        </DropdownMenuSearchFooter>
       </DropdownMenuContent>
     </DropdownMenu>
   );

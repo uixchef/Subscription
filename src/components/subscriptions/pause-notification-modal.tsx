@@ -12,7 +12,10 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
+import type { PauseConfirmPayload } from "@/components/subscriptions/pause-subscription-messages";
 import { cn } from "@/lib/utils";
+
+export type { PauseConfirmPayload } from "@/components/subscriptions/pause-subscription-messages";
 
 function startOfToday() {
   const t = new Date();
@@ -23,7 +26,7 @@ type PauseNotificationModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Fires on Confirm; does not close the modal — close only via X or Cancel. */
-  onConfirm?: () => void;
+  onConfirm?: (payload: PauseConfirmPayload) => void | Promise<void>;
 };
 
 export function PauseNotificationModal({
@@ -199,7 +202,13 @@ export function PauseNotificationModal({
             <button
               type="button"
               className="inline-flex items-center justify-center rounded-[4px] border border-solid border-[#155eef] bg-[#155eef] px-2.5 py-1.5 text-base font-semibold leading-6 text-white shadow-[0px_1px_2px_0px_rgba(16,24,40,0.05)] outline-none hover:bg-[#155eef]/90 focus-visible:ring-2 focus-visible:ring-[#155eef]/40"
-              onClick={() => onConfirm?.()}
+              onClick={() => {
+                const payload: PauseConfirmPayload =
+                  duration === "indefinite"
+                    ? { duration: "indefinite" }
+                    : { duration: "custom", resumeDate };
+                void onConfirm?.(payload);
+              }}
             >
               Confirm
             </button>

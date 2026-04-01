@@ -157,6 +157,10 @@ nextjs-portal {
   a[href]:not([aria-disabled="true"]) {
     @apply cursor-pointer;
   }
+  /* Link CTAs: never underline on hover (platform default) */
+  a[href]:hover {
+    text-decoration: none;
+  }
   button:not(:disabled) {
     @apply cursor-pointer;
   }
@@ -165,5 +169,17 @@ nextjs-portal {
   }
   select:not(:disabled) {
     @apply cursor-pointer;
+  }
+}
+
+@layer utilities {
+  /** Hide native number input steppers (Chrome / Safari / Edge / Firefox). */
+  .input-number-no-spin {
+    -moz-appearance: textfield;
+  }
+  .input-number-no-spin::-webkit-outer-spin-button,
+  .input-number-no-spin::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
   }
 }

@@ -1,8 +1,9 @@
 "use client";
 
-import { Filter, Plus, Search, ChevronsUpDown } from "lucide-react";
+import { Plus, Search, ChevronsUpDown } from "lucide-react";
 
 import { useHubToast } from "@/components/payment-hub/hub-toast";
+import { hubFeatureUnavailableMessage } from "@/lib/hub-feature-unavailable-message";
 import { figmaFieldFocusWithin } from "@/components/subscriptions/figma-field-focus";
 import { cn } from "@/lib/utils";
 
@@ -33,7 +34,7 @@ function FilterBadge({
 }
 
 export function SubscriptionsToolbar() {
-  const { showSuccess } = useHubToast();
+  const { showError } = useHubToast();
 
   return (
     <div className="flex w-full min-w-0 items-center gap-2">
@@ -41,17 +42,12 @@ export function SubscriptionsToolbar() {
         <FilterBadge
           icon={<Plus className="size-[18px]" strokeWidth={2} />}
           label="Add filter"
-          onSelect={() => showSuccess("Add filter")}
-        />
-        <FilterBadge
-          icon={<Filter className="size-[18px]" strokeWidth={2} />}
-          label="Advanced filters"
-          onSelect={() => showSuccess("Advanced filters")}
+          onSelect={() => showError(hubFeatureUnavailableMessage("Add filter"))}
         />
         <FilterBadge
           icon={<ChevronsUpDown className="size-[18px]" strokeWidth={2} />}
           label="Sort"
-          onSelect={() => showSuccess("Sort")}
+          onSelect={() => showError(hubFeatureUnavailableMessage("Sort"))}
         />
       </div>
       <div className="flex min-h-0 min-w-0 flex-1 justify-end">
