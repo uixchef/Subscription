@@ -1,3 +1,4 @@
+import { HubToastProvider, HubToastViewport } from "@/components/payment-hub/hub-toast";
 import { Sidebar } from "@/components/payment-hub/Sidebar";
 import { Topbar } from "@/components/payment-hub/Topbar";
 
@@ -11,16 +12,19 @@ export function PaymentHubShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-full min-h-0 overflow-hidden bg-slate-100/70 text-foreground">
-      <Sidebar />
+    <HubToastProvider>
+      <div className="flex h-full min-h-0 overflow-hidden bg-slate-100/70 text-foreground">
+        <Sidebar />
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-50">
-        <Topbar />
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-50">
+          <Topbar />
 
-        <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#ECEEF2] p-0">
-          {children}
-        </main>
+          <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#ECEEF2] p-0">
+            <HubToastViewport />
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </HubToastProvider>
   );
 }

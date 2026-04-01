@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Payments | Payment Hub",
+  title: "Payments | Subscription | Payments",
   description: "Payment Hub shell — main column content area",
 };
 

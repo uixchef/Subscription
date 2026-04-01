@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { useHubToast } from "@/components/payment-hub/hub-toast";
 import { CancelSubscriptionModal } from "@/components/subscriptions/cancel-subscription-modal";
 import { PauseNotificationModal } from "@/components/subscriptions/pause-notification-modal";
 import { ResumeSubscriptionModal } from "@/components/subscriptions/resume-subscription-modal";
@@ -66,13 +67,14 @@ function SubscriptionRowActions({
   const [pauseModalOpen, setPauseModalOpen] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [resumeModalOpen, setResumeModalOpen] = useState(false);
+  const { showSuccess, showError } = useHubToast();
 
   const itemView = (
     <DropdownMenuItem
       key="view"
       className={rowActionItemClass}
       onSelect={() => {
-        /* navigate to subscription */
+        showSuccess("Opening subscription…");
       }}
     >
       <ArrowUpRight className={rowActionIconClass} strokeWidth={2} aria-hidden />
@@ -98,7 +100,14 @@ function SubscriptionRowActions({
       key="share"
       className={rowActionItemClass}
       onSelect={() => {
-        /* share link */
+        void (async () => {
+          try {
+            await navigator.clipboard.writeText(window.location.href);
+            showSuccess("Payment update link copied to clipboard");
+          } catch {
+            showError("Couldn’t copy link. Try again.");
+          }
+        })();
       }}
     >
       <img
@@ -142,7 +151,7 @@ function SubscriptionRowActions({
       key="update"
       className={rowActionItemClass}
       onSelect={() => {
-        /* update */
+        showSuccess("Subscription update started");
       }}
     >
       <RefreshCw className={rowActionIconClass} strokeWidth={2} aria-hidden />
@@ -229,6 +238,7 @@ function SubscriptionRowActions({
         onConfirm={() => {
           onPauseConfirmed(subscriptionId, baseStatus);
           setPauseModalOpen(false);
+          showSuccess("Subscription paused");
         }}
       />
       <CancelSubscriptionModal
@@ -237,6 +247,7 @@ function SubscriptionRowActions({
         onConfirmCancel={() => {
           onCancelConfirmed(subscriptionId);
           setCancelModalOpen(false);
+          showSuccess("Subscription canceled");
         }}
       />
       <ResumeSubscriptionModal
@@ -245,6 +256,7 @@ function SubscriptionRowActions({
         onConfirmResume={() => {
           onResume(subscriptionId);
           setResumeModalOpen(false);
+          showSuccess("Subscription resumed");
         }}
       />
     </>

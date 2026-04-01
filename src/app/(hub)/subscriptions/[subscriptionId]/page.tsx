@@ -5,7 +5,7 @@ type Props = { params: Promise<{ subscriptionId: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { subscriptionId } = await params;
   return {
-    title: `Subscription ${subscriptionId} | Payment Hub`,
+    title: `Subscription ${subscriptionId} | Payments`,
   };
 }
 

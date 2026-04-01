@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Payment Hub",
+  title: "Subscription | Payments",
   description: "Payments hub shell and app routes",
 };
 

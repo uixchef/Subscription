@@ -5,7 +5,7 @@ import { SubscriptionsTable } from "@/components/subscriptions/subscriptions-tab
 import { SubscriptionsToolbar } from "@/components/subscriptions/subscriptions-toolbar";
 
 export const metadata: Metadata = {
-  title: "Subscriptions | Payment Hub",
+  title: "Subscriptions | Payments",
   description: "Manage subscriptions created via order forms",
 };
 

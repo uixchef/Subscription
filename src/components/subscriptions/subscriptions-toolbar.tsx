@@ -2,18 +2,22 @@
 
 import { Filter, Plus, Search, ChevronsUpDown } from "lucide-react";
 
+import { useHubToast } from "@/components/payment-hub/hub-toast";
 import { cn } from "@/lib/utils";
 
 function FilterBadge({
   icon,
   label,
+  onSelect,
 }: {
   icon: React.ReactNode;
   label: string;
+  onSelect?: () => void;
 }) {
   return (
     <button
       type="button"
+      onClick={onSelect}
       className={cn(
         "inline-flex h-7 shrink-0 items-center gap-0.5 rounded-[14px] border border-[#d0d5dd] bg-white pl-2 pr-3 text-sm font-medium leading-5 text-[#344054]",
         "shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#004eeb]/30"
@@ -28,20 +32,25 @@ function FilterBadge({
 }
 
 export function SubscriptionsToolbar() {
+  const { showSuccess } = useHubToast();
+
   return (
     <div className="flex w-full min-w-0 items-center gap-2">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <FilterBadge
           icon={<Plus className="size-[18px]" strokeWidth={2} />}
           label="Add filter"
+          onSelect={() => showSuccess("Add filter")}
         />
         <FilterBadge
           icon={<Filter className="size-[18px]" strokeWidth={2} />}
           label="Advanced filters"
+          onSelect={() => showSuccess("Advanced filters")}
         />
         <FilterBadge
           icon={<ChevronsUpDown className="size-[18px]" strokeWidth={2} />}
           label="Sort"
+          onSelect={() => showSuccess("Sort")}
         />
       </div>
       <div className="flex min-h-0 min-w-0 flex-1 justify-end">
