@@ -14,6 +14,7 @@ import { useHubToast } from "@/components/payment-hub/hub-toast";
 import { CancelSubscriptionModal } from "@/components/subscriptions/cancel-subscription-modal";
 import { PauseNotificationModal } from "@/components/subscriptions/pause-notification-modal";
 import { ResumeSubscriptionModal } from "@/components/subscriptions/resume-subscription-modal";
+import { SUBSCRIPTION_TOTAL_ROWS } from "@/components/subscriptions/subscriptions-constants";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,8 +28,25 @@ const rowActionItemClass =
 
 const rowActionIconClass = "size-4 shrink-0 text-[#344054]";
 
-/** Fixed column widths so split header/body tables stay aligned. Sum = 1088px. */
-function SubscriptionsTableColGroup() {
+/** Fixed column widths so split header/body tables stay aligned. 1040px without actions; +48px = 1088px with actions. Empty state: six equal-width columns. */
+function SubscriptionsTableColGroup({
+  includeActionsColumn = true,
+}: {
+  includeActionsColumn?: boolean;
+}) {
+  if (!includeActionsColumn) {
+    const sixth = `${100 / 6}%`;
+    return (
+      <colgroup>
+        <col style={{ width: sixth }} />
+        <col style={{ width: sixth }} />
+        <col style={{ width: sixth }} />
+        <col style={{ width: sixth }} />
+        <col style={{ width: sixth }} />
+        <col style={{ width: sixth }} />
+      </colgroup>
+    );
+  }
   return (
     <colgroup>
       <col style={{ width: 160 }} />
@@ -327,10 +345,13 @@ function HeaderCell({
   icon,
   label,
   className,
+  showFilterButton = true,
 }: {
   icon: React.ReactNode;
   label: string;
   className?: string;
+  /** Hidden in empty table (no rows to filter). */
+  showFilterButton?: boolean;
 }) {
   return (
     <th
@@ -347,18 +368,20 @@ function HeaderCell({
         <span className="min-w-0 flex-1 truncate text-base font-semibold leading-6 text-[#101828]">
           {label}
         </span>
-        <button
-          type="button"
-          className="inline-flex size-[14px] shrink-0 items-center justify-center rounded text-[#667085] hover:bg-slate-200/80"
-          aria-label={`Filter ${label}`}
-        >
-          <img
-            src="/icons/subscriptions/filter-lines.svg"
-            alt=""
-            className="size-3.5 shrink-0"
-            aria-hidden
-          />
-        </button>
+        {showFilterButton ? (
+          <button
+            type="button"
+            className="inline-flex size-[14px] shrink-0 items-center justify-center rounded text-[#667085] hover:bg-slate-200/80"
+            aria-label={`Filter ${label}`}
+          >
+            <img
+              src="/icons/subscriptions/filter-lines.svg"
+              alt=""
+              className="size-3.5 shrink-0"
+              aria-hidden
+            />
+          </button>
+        ) : null}
       </div>
     </th>
   );
@@ -542,8 +565,6 @@ function formatUsdUnique(index: number): string {
   }).format(cents / 100);
 }
 
-const TOTAL_ROWS = 212;
-
 function getPaginationItems(
   current: number,
   total: number
@@ -560,6 +581,32 @@ function getPaginationItems(
   return [1, "ellipsis", current - 1, current, current + 1, "ellipsis", total];
 }
 
+function SubscriptionsTableEmptyState() {
+  return (
+    <div
+      className="flex w-full flex-col items-center justify-center gap-4 px-6 py-12"
+      role="status"
+      aria-live="polite"
+    >
+      <img
+        src="/icons/subscriptions/empty-state-subscriptions.svg"
+        alt=""
+        width={160}
+        height={160}
+        className="size-[160px] shrink-0"
+      />
+      <div className="flex w-full max-w-[480px] flex-col items-center gap-1 text-center tracking-normal">
+        <p className="w-full text-base font-semibold leading-6 text-[#101828]">
+          No subscription yet
+        </p>
+        <p className="w-full text-sm font-normal leading-5 text-[#475467]">
+          Your payments and charges will appear here once activity begins.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function SubscriptionsTable() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
@@ -572,7 +619,10 @@ export function SubscriptionsTable() {
 
   const { slice, start, end } = useMemo(() => {
     const startIdx = (page - 1) * perPage;
-    const rowCount = Math.min(perPage, TOTAL_ROWS - startIdx);
+    const rowCount = Math.max(
+      0,
+      Math.min(perPage, SUBSCRIPTION_TOTAL_ROWS - startIdx)
+    );
     const slice = Array.from({ length: rowCount }, (_, i) => {
       const globalIdx = startIdx + i;
       const template = MOCK_ROWS[globalIdx % MOCK_ROWS.length];
@@ -588,27 +638,46 @@ export function SubscriptionsTable() {
       start: rowCount === 0 ? 0 : startIdx + 1,
       end: startIdx + rowCount,
     };
-  }, [page, perPage]);
+  }, [page, perPage, SUBSCRIPTION_TOTAL_ROWS]);
 
-  const totalPages = Math.max(1, Math.ceil(TOTAL_ROWS / perPage));
+  const totalPages = Math.max(1, Math.ceil(SUBSCRIPTION_TOTAL_ROWS / perPage));
 
   const paginationItems = useMemo(
     () => getPaginationItems(page, totalPages),
     [page, totalPages]
   );
 
+  const isEmptyTable = slice.length === 0;
+  const includeActionsColumn = !isEmptyTable;
+  const tableWidthClass = includeActionsColumn
+    ? "min-w-[1088px]"
+    : "w-full min-w-0";
+
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col items-start justify-start gap-0 bg-white">
       <div className="isolate flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-[4px] border border-[#d0d5dd] bg-white">
         {/* Horizontal scroll wraps header + body so columns stay aligned; vertical scroll is body-only (scrollbar below header). */}
         <div className="flex min-h-0 w-full flex-1 flex-col overflow-x-auto">
-          <div className="flex min-h-0 w-full min-w-[1088px] flex-1 flex-col">
+          <div
+            className={cn(
+              "flex min-h-0 w-full flex-1 flex-col",
+              tableWidthClass
+            )}
+          >
             <div className="shrink-0">
-              <table className="w-full min-w-[1088px] table-fixed border-separate border-spacing-0 text-left">
-                <SubscriptionsTableColGroup />
+              <table
+                className={cn(
+                  "w-full table-fixed border-separate border-spacing-0 text-left",
+                  tableWidthClass
+                )}
+              >
+                <SubscriptionsTableColGroup
+                  includeActionsColumn={includeActionsColumn}
+                />
                 <thead>
                   <tr>
                     <HeaderCell
+                      showFilterButton={!isEmptyTable}
                       icon={
                         <img
                           src="/icons/subscriptions/credit-card.svg"
@@ -620,6 +689,7 @@ export function SubscriptionsTable() {
                       label="Provider"
                     />
                     <HeaderCell
+                      showFilterButton={!isEmptyTable}
                       icon={
                         <img
                           src="/icons/subscriptions/account-circle.svg"
@@ -631,6 +701,7 @@ export function SubscriptionsTable() {
                       label="Customer"
                     />
                     <HeaderCell
+                      showFilterButton={!isEmptyTable}
                       icon={
                         <img
                           src="/icons/subscriptions/highlight-mouse-cursor.svg"
@@ -642,6 +713,7 @@ export function SubscriptionsTable() {
                       label="Source"
                     />
                     <HeaderCell
+                      showFilterButton={!isEmptyTable}
                       icon={
                         <img
                           src="/icons/subscriptions/calendar-today.svg"
@@ -653,6 +725,7 @@ export function SubscriptionsTable() {
                       label="Created on"
                     />
                     <HeaderCell
+                      showFilterButton={!isEmptyTable}
                       icon={
                         <img
                           src="/icons/subscriptions/credit-card.svg"
@@ -664,6 +737,7 @@ export function SubscriptionsTable() {
                       label="Amount"
                     />
                     <HeaderCell
+                      showFilterButton={!isEmptyTable}
                       icon={
                         <img
                           src="/icons/subscriptions/flag.svg"
@@ -674,32 +748,53 @@ export function SubscriptionsTable() {
                       }
                       label="Status"
                     />
-                    <th
-                      scope="col"
-                      className="h-9 w-12 border-b border-[#d0d5dd] bg-[#f2f4f7] px-2 text-center align-middle"
-                    >
-                      <button
-                        type="button"
-                        className="inline-flex size-8 items-center justify-center rounded text-[#667085] hover:bg-slate-200/80"
-                        aria-label="Table actions"
+                    {includeActionsColumn ? (
+                      <th
+                        scope="col"
+                        className="h-9 w-12 border-b border-[#d0d5dd] bg-[#f2f4f7] px-2 text-center align-middle"
                       >
-                        <img
-                          src="/icons/subscriptions/highlight-mouse-cursor.svg"
-                          alt=""
-                          className="size-4 shrink-0 object-contain"
-                          aria-hidden
-                        />
-                      </button>
-                    </th>
+                        <button
+                          type="button"
+                          className="inline-flex size-8 items-center justify-center rounded text-[#667085] hover:bg-slate-200/80"
+                          aria-label="Table actions"
+                        >
+                          <img
+                            src="/icons/subscriptions/highlight-mouse-cursor.svg"
+                            alt=""
+                            className="size-4 shrink-0 object-contain"
+                            aria-hidden
+                          />
+                        </button>
+                      </th>
+                    ) : null}
                   </tr>
                 </thead>
               </table>
             </div>
             <div className="min-h-0 w-full flex-1 overflow-y-auto overflow-x-visible [scrollbar-gutter:stable]">
-              <table className="w-full min-w-[1088px] table-fixed border-separate border-spacing-0 text-left">
-                <SubscriptionsTableColGroup />
+              <table
+                className={cn(
+                  "w-full table-fixed border-separate border-spacing-0 text-left",
+                  tableWidthClass
+                )}
+              >
+                <SubscriptionsTableColGroup
+                  includeActionsColumn={includeActionsColumn}
+                />
                 <tbody>
-                  {slice.map((row) => (
+                  {slice.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={includeActionsColumn ? 7 : 6}
+                        className="border-b-0 bg-white p-0 align-top"
+                      >
+                        <div className="flex min-h-[min(400px,calc(100vh-24rem))] w-full flex-col items-center justify-center">
+                          <SubscriptionsTableEmptyState />
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    slice.map((row) => (
                     <tr key={row.id} className="hover:bg-slate-50/80">
                       <td className="h-9 border-b border-r border-[#d0d5dd] px-3 align-middle text-base font-medium leading-6 text-[#475467]">
                         {row.provider}
@@ -779,7 +874,8 @@ export function SubscriptionsTable() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -787,85 +883,87 @@ export function SubscriptionsTable() {
         </div>
       </div>
 
-      <div className="flex h-fit w-full shrink-0 flex-nowrap items-end justify-end gap-4 bg-white px-0 pt-2 pb-2 text-left">
-        <div className="flex min-w-0 flex-wrap items-center gap-1">
-          <label className="flex items-center gap-1 text-sm font-medium leading-5 text-[#475467]">
-            <span className="whitespace-nowrap">Rows per page</span>
-            <select
-              value={perPage}
-              onChange={(e) => {
-                setPerPage(Number(e.target.value));
-                setPage(1);
-              }}
-              className="h-8 min-w-[64px] cursor-pointer rounded border border-[#d0d5dd] bg-white px-2 py-1.5 text-sm font-normal leading-5 text-[#101828] shadow-[0_1px_2px_rgba(16,24,40,0.05)] outline-none hover:border-[#98a2b3] focus-visible:ring-2 focus-visible:ring-[#2970ff]/30"
-              aria-label="Rows per page"
-            >
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-            </select>
-          </label>
-          <p className="text-sm font-normal leading-5 text-[#475467]">
-            {start}-{end} of {TOTAL_ROWS}
-          </p>
-        </div>
-        <nav
-          className="flex flex-wrap items-center gap-1"
-          aria-label="Pagination"
-        >
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className={cn(
-              "inline-flex h-8 shrink-0 items-center justify-center rounded border border-[#d0d5dd] bg-white px-2 py-1 text-sm font-semibold leading-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition-colors",
-              page <= 1
-                ? "cursor-not-allowed text-[#d0d5dd]"
-                : "text-[#475467] hover:bg-slate-50"
-            )}
-          >
-            Previous
-          </button>
-          <div className="flex items-center gap-1">
-            {paginationItems.map((item, idx) =>
-              item === "ellipsis" ? (
-                <span
-                  key={`ellipsis-${idx}`}
-                  className="inline-flex h-8 min-w-8 shrink-0 items-center justify-center rounded border border-[#d0d5dd] bg-white px-2 text-sm leading-5 text-[#101828] shadow-[0_1px_2px_rgba(16,24,40,0.05)]"
-                  aria-hidden
-                >
-                  …
-                </span>
-              ) : (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setPage(item)}
-                  className={cn(
-                    "inline-flex min-h-8 min-w-8 items-center justify-center rounded p-1.5 text-sm font-normal leading-5 text-[#475467] transition-colors",
-                    page === item
-                      ? "border border-[#2970ff] bg-white"
-                      : "border border-transparent hover:bg-slate-100"
-                  )}
-                  aria-current={page === item ? "page" : undefined}
-                >
-                  {item}
-                </button>
-              )
-            )}
+      {SUBSCRIPTION_TOTAL_ROWS > 0 ? (
+        <div className="flex h-fit w-full shrink-0 flex-nowrap items-end justify-end gap-4 bg-white px-0 pt-2 pb-2 text-left">
+          <div className="flex min-w-0 flex-wrap items-center gap-1">
+            <label className="flex items-center gap-1 text-sm font-medium leading-5 text-[#475467]">
+              <span className="whitespace-nowrap">Rows per page</span>
+              <select
+                value={perPage}
+                onChange={(e) => {
+                  setPerPage(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="h-8 min-w-[64px] cursor-pointer rounded border border-[#d0d5dd] bg-white px-2 py-1.5 text-sm font-normal leading-5 text-[#101828] shadow-[0_1px_2px_rgba(16,24,40,0.05)] outline-none hover:border-[#98a2b3] focus-visible:ring-2 focus-visible:ring-[#2970ff]/30"
+                aria-label="Rows per page"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+              </select>
+            </label>
+            <p className="text-sm font-normal leading-5 text-[#475467]">
+              {start}-{end} of {SUBSCRIPTION_TOTAL_ROWS}
+            </p>
           </div>
-          <button
-            type="button"
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            className={cn(
-              "inline-flex h-8 shrink-0 items-center justify-center rounded border border-[#d0d5dd] bg-white px-2 py-1 text-sm font-semibold leading-5 text-[#475467] shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-[#d0d5dd]"
-            )}
+          <nav
+            className="flex flex-wrap items-center gap-1"
+            aria-label="Pagination"
           >
-            Next
-          </button>
-        </nav>
-      </div>
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className={cn(
+                "inline-flex h-8 shrink-0 items-center justify-center rounded border border-[#d0d5dd] bg-white px-2 py-1 text-sm font-semibold leading-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition-colors",
+                page <= 1
+                  ? "cursor-not-allowed text-[#d0d5dd]"
+                  : "text-[#475467] hover:bg-slate-50"
+              )}
+            >
+              Previous
+            </button>
+            <div className="flex items-center gap-1">
+              {paginationItems.map((item, idx) =>
+                item === "ellipsis" ? (
+                  <span
+                    key={`ellipsis-${idx}`}
+                    className="inline-flex h-8 min-w-8 shrink-0 items-center justify-center rounded border border-[#d0d5dd] bg-white px-2 text-sm leading-5 text-[#101828] shadow-[0_1px_2px_rgba(16,24,40,0.05)]"
+                    aria-hidden
+                  >
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setPage(item)}
+                    className={cn(
+                      "inline-flex min-h-8 min-w-8 items-center justify-center rounded p-1.5 text-sm font-normal leading-5 text-[#475467] transition-colors",
+                      page === item
+                        ? "border border-[#2970ff] bg-white"
+                        : "border border-transparent hover:bg-slate-100"
+                    )}
+                    aria-current={page === item ? "page" : undefined}
+                  >
+                    {item}
+                  </button>
+                )
+              )}
+            </div>
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className={cn(
+                "inline-flex h-8 shrink-0 items-center justify-center rounded border border-[#d0d5dd] bg-white px-2 py-1 text-sm font-semibold leading-5 text-[#475467] shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-[#d0d5dd]"
+              )}
+            >
+              Next
+            </button>
+          </nav>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -60,8 +60,9 @@ export function SubscriptionsToolbar() {
           </label>
           <div
             className={cn(
-              "flex h-9 w-full items-center gap-1 rounded-[4px] border border-[#d0d5dd] bg-white px-2 shadow-[0_1px_2px_rgba(16,24,40,0.05)]",
-              "focus-within:border-[#004eeb] focus-within:ring-2 focus-within:ring-[#004eeb]/30"
+              "flex h-9 w-full items-center gap-1 rounded-[4px] border border-[#d0d5dd] bg-white px-2 shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition-[border-color,box-shadow] duration-150",
+              /* Figma focused: Primary/300 border + xs shadow + 4px Primary/100 spread (no outline ring — avoids double edge) */
+              "focus-within:border-[#84adff] focus-within:shadow-[0_1px_2px_rgba(16,24,40,0.05),0_0_0_4px_#d1e0ff]"
             )}
           >
             <Search
@@ -73,7 +74,7 @@ export function SubscriptionsToolbar() {
               id="subscriptions-toolbar-search"
               type="search"
               placeholder="Search"
-              className="min-w-0 flex-1 border-0 bg-transparent p-0 text-base leading-6 text-[#667085] outline-none placeholder:text-[#667085] focus:ring-0"
+              className="min-w-0 flex-1 border-0 bg-transparent p-0 text-base leading-6 text-[#667085] outline-none placeholder:text-[#667085] focus:outline-none focus-visible:outline-none focus-visible:ring-0"
             />
           </div>
         </div>

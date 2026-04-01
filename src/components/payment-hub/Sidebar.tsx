@@ -8,6 +8,8 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 const ICON = "/icons/sidebar";
+/** Copied from HighLevel: `Icons/Overview/chevron-left.svg` (30×30 control w/ mint fill + shadow). */
+const COLLAPSE_CONTROL_SRC = "/icons/overview/chevron-left.svg";
 
 const NARROW_QUERY = "(max-width: 1023px)";
 
@@ -136,13 +138,13 @@ export function Sidebar() {
               <Image
                 src="/payment-hub-logo.png"
                 alt="Brand logo"
-                width={160}
+                width={40}
                 height={40}
-                className={cn(
-                  "h-10 w-auto max-w-full object-contain object-center",
-                  collapsed && "max-h-10"
-                )}
                 priority
+                className={cn(
+                  "object-contain object-center",
+                  collapsed ? "size-10" : "h-10 w-10 max-w-full"
+                )}
               />
             </div>
 
@@ -328,7 +330,7 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Toggle: Figma collapsed = chevron-right (expand); expanded = chevron-left (collapse) */}
+      {/* Sidebar rail control — full asset from HighLevel Overview (not removed; replaces ad-hoc circle+icon). */}
       <button
         type="button"
         onClick={() => {
@@ -339,17 +341,18 @@ export function Sidebar() {
         }}
         aria-expanded={!collapsed}
         aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        className="absolute bottom-6 -right-3 border-0 bg-transparent p-0 shadow-none hover:opacity-90"
+        className="absolute bottom-6 left-full z-50 inline-flex min-h-[30px] min-w-[30px] -translate-x-1/2 cursor-pointer items-center justify-center border-0 bg-transparent p-0 shadow-none hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#101828]/25"
       >
-        <Image
-          src={`${ICON}/chevron-left.svg`}
+        {/* Native img: SVG filters/shadows render consistently vs next/image for this asset */}
+        <img
+          src={COLLAPSE_CONTROL_SRC}
           alt=""
           width={30}
           height={30}
-          unoptimized
+          decoding="async"
           className={cn(
-            "block size-[30px] transition-transform duration-200",
-            collapsed && "rotate-180"
+            "pointer-events-none block size-[30px] select-none transition-transform duration-200",
+            collapsed && "scale-x-[-1]"
           )}
         />
       </button>
