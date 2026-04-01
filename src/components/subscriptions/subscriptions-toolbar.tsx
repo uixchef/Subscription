@@ -3,6 +3,7 @@
 import { Filter, Plus, Search, ChevronsUpDown } from "lucide-react";
 
 import { useHubToast } from "@/components/payment-hub/hub-toast";
+import { figmaFieldFocusWithin } from "@/components/subscriptions/figma-field-focus";
 import { cn } from "@/lib/utils";
 
 function FilterBadge({
@@ -60,9 +61,8 @@ export function SubscriptionsToolbar() {
           </label>
           <div
             className={cn(
-              "flex h-9 w-full items-center gap-1 rounded-[4px] border border-[#d0d5dd] bg-white px-2 shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition-[border-color,box-shadow] duration-150",
-              /* Figma focused: Primary/300 border + xs shadow + 4px Primary/100 spread (no outline ring — avoids double edge) */
-              "focus-within:border-[#84adff] focus-within:shadow-[0_1px_2px_rgba(16,24,40,0.05),0_0_0_4px_#d1e0ff]"
+              "flex h-9 w-full items-center gap-1 rounded-[4px] border border-[#d0d5dd] bg-white px-2 shadow-[0_1px_2px_rgba(16,24,40,0.05)]",
+              figmaFieldFocusWithin
             )}
           >
             <Search

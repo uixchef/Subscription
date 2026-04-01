@@ -1,11 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { Download, Plus } from "lucide-react";
 import { useState } from "react";
 
 import { useHubToast } from "@/components/payment-hub/hub-toast";
 import { CreateSubscriptionModal } from "@/components/subscriptions/create-subscription-modal";
+import {
+  EditCustomerInformationModal,
+  EMPTY_CUSTOMER_FORM_VALUES,
+  type CustomerFormValues,
+} from "@/components/subscriptions/edit-customer-information-modal";
 import { Button } from "@/components/ui/button";
 
 export function SubscriptionsHeader() {
@@ -13,6 +17,20 @@ export function SubscriptionsHeader() {
   const [createOpen, setCreateOpen] = useState(false);
   /** New instance each open so the form always starts from defaults (avoids stale state). */
   const [createModalKey, setCreateModalKey] = useState(0);
+  const [customerEditFields, setCustomerEditFields] =
+    useState<CustomerFormValues | null>(null);
+  const [editCustomerOpen, setEditCustomerOpen] = useState(false);
+  const [customerFormKey, setCustomerFormKey] = useState(0);
+  const [customerFormVariant, setCustomerFormVariant] = useState<"edit" | "add">(
+    "edit"
+  );
+  const [editCustomerInitial, setEditCustomerInitial] =
+    useState<CustomerFormValues>(EMPTY_CUSTOMER_FORM_VALUES);
+  /** Shown on Create subscription overlay at 52px after save/add from Edit customer (parent clears on dismiss). */
+  const [customerSaveToast, setCustomerSaveToast] = useState<{
+    name: string;
+    mode: "edit" | "add";
+  } | null>(null);
 
   return (
     <div className="flex h-fit w-full min-w-0 shrink-0 items-center border-b border-[#d0d5dd] bg-white px-4 pb-2 pt-2">
@@ -22,15 +40,7 @@ export function SubscriptionsHeader() {
             Subscriptions
           </h1>
           <p className="mt-1 text-sm leading-5 text-[#475467]">
-            Keep track of customer subscriptions created via order forms.{" "}
-            <Link
-              href="https://highrise.gohighlevel.com"
-              className="font-medium text-[#004eeb] hover:underline"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              View documentation
-            </Link>
+            Keep track of customer subscriptions created via order forms.
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -52,6 +62,8 @@ export function SubscriptionsHeader() {
             className="h-auto gap-2 rounded border border-[#155eef] bg-[#155eef] px-2.5 py-1.5 text-base font-semibold text-white shadow-[0_1px_2px_rgba(16,24,40,0.05)] hover:bg-[#155eef]/90"
             onClick={() => {
               setCreateModalKey((k) => k + 1);
+              setCustomerEditFields(null);
+              setCustomerSaveToast(null);
               setCreateOpen(true);
             }}
           >
@@ -61,9 +73,53 @@ export function SubscriptionsHeader() {
         </div>
       </div>
       <CreateSubscriptionModal
-        key={createModalKey}
+        key={`create-${createModalKey}`}
         open={createOpen}
-        onOpenChange={setCreateOpen}
+        onOpenChange={(next) => {
+          setCreateOpen(next);
+          if (!next) setCustomerSaveToast(null);
+        }}
+        customerEditFields={customerEditFields}
+        onCustomerEditFieldsChange={setCustomerEditFields}
+        customerSaveToast={customerSaveToast}
+        onCustomerSaveToastDismiss={() => setCustomerSaveToast(null)}
+        onRequestEditCustomer={(initialValues) => {
+          setCustomerFormVariant("edit");
+          setEditCustomerInitial(initialValues);
+          setCustomerFormKey((k) => k + 1);
+          setCreateOpen(false);
+          setEditCustomerOpen(true);
+        }}
+        onRequestAddCustomer={() => {
+          setCustomerFormVariant("add");
+          setEditCustomerInitial(EMPTY_CUSTOMER_FORM_VALUES);
+          setCustomerFormKey((k) => k + 1);
+          setCreateOpen(false);
+          setEditCustomerOpen(true);
+        }}
+      />
+      <EditCustomerInformationModal
+        key={`edit-customer-${customerFormKey}`}
+        open={editCustomerOpen}
+        variant={customerFormVariant}
+        onOpenChange={(next) => {
+          if (!next) {
+            setEditCustomerOpen(false);
+            setEditCustomerInitial(EMPTY_CUSTOMER_FORM_VALUES);
+            setCreateOpen(true);
+          }
+        }}
+        initialValues={editCustomerInitial}
+        onSave={(values) => {
+          setCustomerEditFields(values);
+          setCustomerSaveToast({
+            name: values.name.trim() || "Customer",
+            mode: customerFormVariant,
+          });
+          setEditCustomerOpen(false);
+          setEditCustomerInitial(EMPTY_CUSTOMER_FORM_VALUES);
+          setCreateOpen(true);
+        }}
       />
     </div>
   );

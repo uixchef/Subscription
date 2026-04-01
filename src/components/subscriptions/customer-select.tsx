@@ -1,133 +1,27 @@
 "use client";
 
-import { ChevronDown, Plus } from "lucide-react";
+import { Check, ChevronDown, Plus } from "lucide-react";
 import { useMemo } from "react";
 
-import { useHubToast } from "@/components/payment-hub/hub-toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { figmaFieldFocusVisible } from "@/components/subscriptions/figma-field-focus";
+import {
+  CUSTOMER_DEMO_PROFILES,
+  type CustomerDemoProfile,
+} from "@/components/subscriptions/customer-demo-data";
 import { cn } from "@/lib/utils";
 
-export type CustomerOption = {
-  id: string;
-  name: string;
-  email: string;
-  /** Same hex palette as subscriptions table `customer.avatarBg` */
-  avatarBg?: string;
-};
+export type CustomerOption = CustomerDemoProfile;
 
-/** Backgrounds aligned with `subscriptions-table` CustomerCell / MOCK_ROWS. */
-const CUSTOMERS: CustomerOption[] = [
-  { id: "sg", name: "Sarthak Goyal", email: "hey@uixchef.com", avatarBg: "#f2f4f7" },
-  {
-    id: "eb",
-    name: "Erin Ekstrom Bothman",
-    email: "erinekstrombothman@gmail.com",
-    avatarBg: "#dbeafe",
-  },
-  {
-    id: "mc",
-    name: "Madelyn Calzoni",
-    email: "madelyncalzoni@gmail.com",
-    avatarBg: "#dbc0dd",
-  },
-  {
-    id: "mg",
-    name: "Madelyn Geidt",
-    email: "madelyngeidt@gmail.com",
-    avatarBg: "#d1baa9",
-  },
-  {
-    id: "ds",
-    name: "Dulce Schleifer",
-    email: "dulceschleifer@gmail.com",
-    avatarBg: "#dfcc9f",
-  },
-  {
-    id: "am",
-    name: "Allison Mango",
-    email: "allisonmango@gmail.com",
-    avatarBg: "#c2c7b8",
-  },
-  {
-    id: "oj",
-    name: "Olivia John",
-    email: "olivia.john@gmail.com",
-    avatarBg: "#f2f4f7",
-  },
-  {
-    id: "jh",
-    name: "James Hall",
-    email: "james.hall@gmail.com",
-    avatarBg: "#dfcc9f",
-  },
-  {
-    id: "ku",
-    name: "Kris Ullman",
-    email: "kris.ullman@gmail.com",
-    avatarBg: "#c2c7b8",
-  },
-  {
-    id: "lb",
-    name: "Lori Bryson",
-    email: "lori.bryson@gmail.com",
-    avatarBg: "#d1baa9",
-  },
-  {
-    id: "cg",
-    name: "Chris Glasser",
-    email: "chris.glasser@gmail.com",
-    avatarBg: "#f2f4f7",
-  },
-  {
-    id: "mw",
-    name: "Marcus Webb",
-    email: "marcus.webb@gmail.com",
-    avatarBg: "#dbeafe",
-  },
-  {
-    id: "ps",
-    name: "Priya Sharma",
-    email: "priya.sharma@gmail.com",
-    avatarBg: "#dbc0dd",
-  },
-  {
-    id: "nc",
-    name: "Noah Chen",
-    email: "noah.chen@gmail.com",
-    avatarBg: "#dfcc9f",
-  },
-  {
-    id: "tr",
-    name: "Taylor Reid",
-    email: "taylor.reid@gmail.com",
-    avatarBg: "#c2c7b8",
-  },
-  {
-    id: "av",
-    name: "Avery Kim",
-    email: "avery.kim@gmail.com",
-    avatarBg: "#f2f4f7",
-  },
-  {
-    id: "jr",
-    name: "Jordan Rivera",
-    email: "jordan.rivera@gmail.com",
-    avatarBg: "#dbeafe",
-  },
-  {
-    id: "em",
-    name: "Emma Fitzgerald",
-    email: "emma.fitzgerald@gmail.com",
-    avatarBg: "#dbc0dd",
-  },
-];
+/** Demo directory — identity + default address/phone per customer. */
+export const CUSTOMERS = CUSTOMER_DEMO_PROFILES;
 
-function initialsFromName(name: string) {
+export function initialsFromName(name: string) {
   return name
     .split(/\s+/)
     .map((n) => n[0])
@@ -136,10 +30,23 @@ function initialsFromName(name: string) {
     .toUpperCase();
 }
 
-function CustomerAvatar({ option }: { option: CustomerOption }) {
+export function findCustomerById(id: string): CustomerOption | undefined {
+  return CUSTOMERS.find((c) => c.id === id);
+}
+
+export function CustomerAvatar({
+  option,
+  className,
+}: {
+  option: CustomerOption;
+  className?: string;
+}) {
   return (
     <span
-      className="flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-[#344054]"
+      className={cn(
+        "flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-[#344054]",
+        className
+      )}
       style={{ backgroundColor: option.avatarBg ?? "#e4e7ec" }}
       aria-hidden
     >
@@ -152,11 +59,15 @@ type CustomerSelectProps = {
   id?: string;
   value: string;
   onValueChange: (id: string) => void;
+  onAddCustomer?: () => void;
 };
 
-export function CustomerSelect({ id, value, onValueChange }: CustomerSelectProps) {
-  const { showSuccess } = useHubToast();
-
+export function CustomerSelect({
+  id,
+  value,
+  onValueChange,
+  onAddCustomer,
+}: CustomerSelectProps) {
   const selected = useMemo(
     () => CUSTOMERS.find((c) => c.id === value),
     [value]
@@ -171,8 +82,8 @@ export function CustomerSelect({ id, value, onValueChange }: CustomerSelectProps
           type="button"
           id={id}
           className={cn(
-            "group flex h-9 w-full min-h-9 items-center justify-between gap-2 rounded border border-[#d0d5dd] bg-white p-2 text-left text-base leading-6 shadow-[0px_1px_2px_0px_rgba(16,24,40,0.05)] outline-none",
-            "focus-visible:ring-2 focus-visible:ring-[#004eeb]/30",
+            "group flex h-9 w-full min-h-9 items-center justify-between gap-2 rounded border border-[#d0d5dd] bg-white p-2 text-left text-base leading-6 shadow-[0px_1px_2px_0px_rgba(16,24,40,0.05)]",
+            figmaFieldFocusVisible,
             "data-[state=open]:border-[#84adff] data-[state=open]:shadow-[0px_1px_2px_0px_rgba(16,24,40,0.05),0px_0px_0px_4px_#d1e0ff]",
             selected ? "text-[#101828]" : "text-[#475467]"
           )}
@@ -193,35 +104,51 @@ export function CustomerSelect({ id, value, onValueChange }: CustomerSelectProps
         )}
       >
         <DropdownMenuItem
-          className="cursor-pointer justify-start gap-2 rounded-none px-4 py-2 text-base font-semibold leading-6 text-[#004eeb] focus:bg-white data-[highlighted]:bg-[#f9fafb]"
-          onSelect={() => showSuccess("Add customer flow would open here.")}
+          className="cursor-pointer justify-start gap-2 rounded-none px-4 py-2 text-base font-semibold leading-6 text-[#004eeb] data-[highlighted]:bg-[#f9fafb] data-[highlighted]:text-[#004eeb]"
+          onSelect={() => onAddCustomer?.()}
         >
           <Plus className="size-5 shrink-0" strokeWidth={2} aria-hidden />
           Add customer
         </DropdownMenuItem>
         <div className="h-px w-full bg-[#d0d5dd]" role="separator" />
         <div className="max-h-[min(356px,calc(100vh-12rem))] overflow-y-auto overflow-x-hidden py-1">
-          {CUSTOMERS.map((c) => (
-            <DropdownMenuItem
-              key={c.id}
-              className="cursor-pointer rounded-none border-0 bg-transparent px-4 py-2 text-left shadow-none focus:bg-[#f9fafb] data-[highlighted]:bg-[#f9fafb]"
-              onSelect={() => onValueChange(c.id)}
-            >
-              <div className="flex w-full min-w-0 items-center gap-2 rounded-md">
-                <CustomerAvatar option={c} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <p className="truncate text-base font-medium leading-6 text-[#101828]">
-                      {c.name}
+          {CUSTOMERS.map((c) => {
+            const isSelected = c.id === value;
+            return (
+              <DropdownMenuItem
+                key={c.id}
+                selected={isSelected}
+                className="cursor-pointer rounded-none border-0 px-4 py-2 text-left text-base font-medium shadow-none"
+                onSelect={() => onValueChange(c.id)}
+              >
+                <div className="flex w-full min-w-0 items-center gap-2 rounded-md">
+                  <CustomerAvatar option={c} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <p
+                        className={cn(
+                          "truncate text-base leading-6 text-[#101828]",
+                          isSelected ? "font-semibold" : "font-medium"
+                        )}
+                      >
+                        {c.name}
+                      </p>
+                    </div>
+                    <p className="truncate text-sm font-normal leading-5 text-[#475467]">
+                      {c.email}
                     </p>
                   </div>
-                  <p className="truncate text-sm font-normal leading-5 text-[#475467]">
-                    {c.email}
-                  </p>
+                  {isSelected ? (
+                    <Check
+                      className="size-4 shrink-0 text-[#155eef]"
+                      strokeWidth={2}
+                      aria-hidden
+                    />
+                  ) : null}
                 </div>
-              </div>
-            </DropdownMenuItem>
-          ))}
+              </DropdownMenuItem>
+            );
+          })}
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

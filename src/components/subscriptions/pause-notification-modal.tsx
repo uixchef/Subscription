@@ -1,8 +1,10 @@
 "use client";
 
-import { Calendar, Check, X } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { X } from "lucide-react";
+import { useCallback, useId, useState } from "react";
 
+import { FigmaDatePickerField } from "@/components/subscriptions/figma-date-picker";
+import { FigmaRadioIndicator } from "@/components/subscriptions/figma-radio-indicator";
 import {
   Dialog,
   DialogClose,
@@ -12,35 +14,17 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
+function startOfToday() {
+  const t = new Date();
+  return new Date(t.getFullYear(), t.getMonth(), t.getDate());
+}
+
 type PauseNotificationModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Fires on Confirm; does not close the modal — close only via X or Cancel. */
   onConfirm?: () => void;
 };
-
-/** Figma Radio (sm): 16×16, radius 8, border #98a2b3 / #155eef, check ~6px centered. */
-function RadioDot({ checked }: { checked: boolean }) {
-  return (
-    <span
-      className={cn(
-        "relative inline-flex size-4 shrink-0 rounded-[8px] border border-solid",
-        checked
-          ? "overflow-hidden border-[#155eef] bg-[#155eef]"
-          : "border-[#98a2b3] bg-white"
-      )}
-      aria-hidden
-    >
-      {checked ? (
-        <Check
-          className="pointer-events-none absolute top-1/2 left-1/2 size-[6px] -translate-x-1/2 -translate-y-1/2 text-white"
-          strokeWidth={3}
-          aria-hidden
-        />
-      ) : null}
-    </span>
-  );
-}
 
 export function PauseNotificationModal({
   open,
@@ -53,16 +37,22 @@ export function PauseNotificationModal({
   const [invoiceBehaviour, setInvoiceBehaviour] = useState<"void" | "draft">(
     "void"
   );
+  const [resumeDate, setResumeDate] = useState(startOfToday);
   const groupDuration = useId();
 
-  useEffect(() => {
-    if (open) {
-      setDuration("indefinite");
-    }
-  }, [open]);
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (next) {
+        setDuration("indefinite");
+        setResumeDate(startOfToday());
+      }
+      onOpenChange(next);
+    },
+    [onOpenChange]
+  );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="w-full max-w-[min(576px,calc(100vw-2rem))] gap-0 overflow-hidden p-0 sm:max-w-[min(576px,calc(100vw-2rem))]">
         {/* Modal header — title + subtitle */}
         <div className="flex flex-col px-4 pt-3 pb-0">
@@ -101,7 +91,7 @@ export function PauseNotificationModal({
                     onChange={() => setDuration("indefinite")}
                   />
                   <span className="flex h-5 shrink-0 items-center">
-                    <RadioDot checked={duration === "indefinite"} />
+                    <FigmaRadioIndicator checked={duration === "indefinite"} />
                   </span>
                   <span className="min-w-0 flex-1 text-base leading-6 text-[#101828]">
                     Indefinite
@@ -117,31 +107,18 @@ export function PauseNotificationModal({
                     onChange={() => setDuration("custom")}
                   />
                   <span className="flex h-5 shrink-0 items-center">
-                    <RadioDot checked={duration === "custom"} />
+                    <FigmaRadioIndicator checked={duration === "custom"} />
                   </span>
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
                     <span className="text-base leading-6 text-[#101828]">
                       Custom date
                     </span>
                     {duration === "custom" ? (
-                      <div
-                        className="flex h-9 w-full items-center gap-2 rounded-[4px] border border-solid border-[#d0d5dd] bg-white px-2 shadow-[0px_1px_2px_0px_rgba(16,24,40,0.05)]"
+                      <FigmaDatePickerField
+                        value={resumeDate}
+                        onChange={setResumeDate}
                         aria-label="Resume date"
-                        role="group"
-                      >
-                        <Calendar
-                          className="size-4 shrink-0 text-[#667085]"
-                          strokeWidth={2}
-                          aria-hidden
-                        />
-                        <div className="flex min-w-0 flex-1 items-center gap-1 text-base leading-6 text-[#667085]">
-                          <span>DD</span>
-                          <span>/</span>
-                          <span>MM</span>
-                          <span>/</span>
-                          <span>YYYY</span>
-                        </div>
-                      </div>
+                      />
                     ) : null}
                   </div>
                 </label>
@@ -175,7 +152,7 @@ export function PauseNotificationModal({
                       would be generated for this period.
                     </p>
                   </div>
-                  <RadioDot checked={invoiceBehaviour === "void"} />
+                  <FigmaRadioIndicator checked={invoiceBehaviour === "void"} />
                 </button>
                 <button
                   type="button"
@@ -199,7 +176,7 @@ export function PauseNotificationModal({
                       customers.
                     </p>
                   </div>
-                  <RadioDot checked={invoiceBehaviour === "draft"} />
+                  <FigmaRadioIndicator checked={invoiceBehaviour === "draft"} />
                 </button>
               </div>
             </div>

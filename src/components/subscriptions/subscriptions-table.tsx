@@ -14,6 +14,7 @@ import { useHubToast } from "@/components/payment-hub/hub-toast";
 import { CancelSubscriptionModal } from "@/components/subscriptions/cancel-subscription-modal";
 import { PauseNotificationModal } from "@/components/subscriptions/pause-notification-modal";
 import { ResumeSubscriptionModal } from "@/components/subscriptions/resume-subscription-modal";
+import { figmaFieldFocusVisible } from "@/components/subscriptions/figma-field-focus";
 import { SUBSCRIPTION_TOTAL_ROWS } from "@/components/subscriptions/subscriptions-constants";
 import {
   DropdownMenu,
@@ -24,7 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const rowActionItemClass =
-  "cursor-pointer gap-2 rounded px-4 py-2 text-base font-medium leading-6 text-[#101828] focus:bg-[#f9fafb] focus:text-[#101828] data-[highlighted]:bg-[#f9fafb] data-[highlighted]:text-[#101828]";
+  "cursor-pointer gap-2 rounded px-4 py-2 text-base font-medium leading-6 text-[#101828] data-[highlighted]:bg-[#f2f4f7] data-[highlighted]:text-[#101828]";
 
 const rowActionIconClass = "size-4 shrink-0 text-[#344054]";
 
@@ -894,7 +895,10 @@ export function SubscriptionsTable() {
                   setPerPage(Number(e.target.value));
                   setPage(1);
                 }}
-                className="h-8 min-w-[64px] cursor-pointer rounded border border-[#d0d5dd] bg-white px-2 py-1.5 text-sm font-normal leading-5 text-[#101828] shadow-[0_1px_2px_rgba(16,24,40,0.05)] outline-none hover:border-[#98a2b3] focus-visible:ring-2 focus-visible:ring-[#2970ff]/30"
+                className={cn(
+                  "h-8 min-w-[64px] cursor-pointer rounded border border-[#d0d5dd] bg-white px-2 py-1.5 text-sm font-normal leading-5 text-[#101828] shadow-[0_1px_2px_rgba(16,24,40,0.05)] hover:border-[#98a2b3]",
+                  figmaFieldFocusVisible
+                )}
                 aria-label="Rows per page"
               >
                 <option value={10}>10</option>

@@ -29,20 +29,28 @@ type HubToastContextValue = {
 
 const HubToastContext = createContext<HubToastContextValue | null>(null);
 
-const TOAST_MS = 5000;
+export const HUB_TOAST_DURATION_MS = 5000;
+
+/** Figma modal overlay — Alert from top of viewport (Subscription-2025, e.g. node 1422:260829). */
+export const MODAL_OVERLAY_TOAST_TOP_PX = 52;
+
+const TOAST_MS = HUB_TOAST_DURATION_MS;
 
 /**
  * Figma Alert (node 1399:35444) — error: bg/border/text from Secondary/Error tokens.
  * Success: same layout with success surface + check icon.
  */
-function HubAlertToast({
+export function HubAlertToast({
   variant,
   message,
   onDismiss,
+  className,
 }: {
   variant: HubToastVariant;
   message: string;
   onDismiss: () => void;
+  /** e.g. `w-full max-w-none` when embedded in a modal */
+  className?: string;
 }) {
   const titleId = useId();
   const isError = variant === "error";
@@ -55,7 +63,8 @@ function HubAlertToast({
         "pointer-events-auto flex w-fit max-w-[min(478px,calc(100vw-2rem))] items-start gap-2 rounded-[8px] border border-solid p-2 shadow-[0px_4px_8px_-2px_rgba(16,24,40,0.1),0px_2px_4px_-2px_rgba(16,24,40,0.06)]",
         isError
           ? "border-[#fda29b] bg-[#fffbfa]"
-          : "border-[#6ce9a6] bg-[#ecfdf3]"
+          : "border-[#6ce9a6] bg-[#ecfdf3]",
+        className
       )}
     >
       <span
