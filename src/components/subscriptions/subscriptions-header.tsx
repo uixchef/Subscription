@@ -1,7 +1,7 @@
 "use client";
 
 import { Download, Plus } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   AddLineItemTaxModal,
@@ -9,6 +9,14 @@ import {
 } from "@/components/subscriptions/add-line-item-tax-modal";
 import { useHubToast } from "@/components/payment-hub/hub-toast";
 import { CreateSubscriptionModal } from "@/components/subscriptions/create-subscription-modal";
+import {
+  AddPaymentCardModal,
+  type PaymentCardFormValues,
+} from "@/components/subscriptions/add-payment-card-modal";
+import {
+  buildSubscriptionPaymentCard,
+  type SubscriptionPaymentCard,
+} from "@/components/subscriptions/subscription-payment-card";
 import {
   EditCustomerInformationModal,
   EMPTY_CUSTOMER_FORM_VALUES,
@@ -18,7 +26,7 @@ import { Button } from "@/components/ui/button";
 import { hubFeatureUnavailableMessage } from "@/lib/hub-feature-unavailable-message";
 
 export function SubscriptionsHeader() {
-  const { showError } = useHubToast();
+  const { showError, showSuccess } = useHubToast();
   const [createOpen, setCreateOpen] = useState(false);
   /** New instance each open so the form always starts from defaults (avoids stale state). */
   const [createModalKey, setCreateModalKey] = useState(0);
@@ -36,6 +44,23 @@ export function SubscriptionsHeader() {
     name: string;
     mode: "edit" | "add";
   } | null>(null);
+
+  const [addPaymentCardOpen, setAddPaymentCardOpen] = useState(false);
+  const [addPaymentCardKey, setAddPaymentCardKey] = useState(0);
+  const [savedPaymentCards, setSavedPaymentCards] = useState<
+    SubscriptionPaymentCard[]
+  >([]);
+  /** Briefly highlight + scroll to this card after add flow (feels responsive). */
+  const [lastAddedPaymentCardId, setLastAddedPaymentCardId] = useState<
+    string | null
+  >(null);
+  const lastAddedClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (lastAddedClearRef.current) clearTimeout(lastAddedClearRef.current);
+    };
+  }, []);
 
   const [addLineItemTaxOpen, setAddLineItemTaxOpen] = useState(false);
   const [lineItemTaxKey, setLineItemTaxKey] = useState(0);
@@ -105,6 +130,11 @@ export function SubscriptionsHeader() {
               setCustomerEditFields(null);
               setCustomerSaveToast(null);
               setSubscriptionTaxSelection(null);
+              setLastAddedPaymentCardId(null);
+              if (lastAddedClearRef.current) {
+                clearTimeout(lastAddedClearRef.current);
+                lastAddedClearRef.current = null;
+              }
               setCreateOpen(true);
             }}
           >
@@ -138,6 +168,11 @@ export function SubscriptionsHeader() {
           setCreateOpen(false);
           setEditCustomerOpen(true);
         }}
+        onRequestAddPaymentCard={() => {
+          setAddPaymentCardKey((k) => k + 1);
+          setCreateOpen(false);
+          setAddPaymentCardOpen(true);
+        }}
         onRequestAddLineItemTax={(payload) => {
           setLineItemTaxContext(
             payload.kind === "subscription"
@@ -157,6 +192,37 @@ export function SubscriptionsHeader() {
         }}
         lineTaxPatch={lineTaxPatch}
         onLineTaxPatchConsumed={onLineTaxPatchConsumed}
+        savedPaymentCards={savedPaymentCards}
+        lastAddedPaymentCardId={lastAddedPaymentCardId}
+      />
+      <AddPaymentCardModal
+        key={`add-payment-card-${addPaymentCardKey}`}
+        open={addPaymentCardOpen}
+        onOpenChange={(next) => {
+          if (!next) {
+            setAddPaymentCardOpen(false);
+            setCreateOpen(true);
+          }
+        }}
+        onSave={(values: PaymentCardFormValues) => {
+          showSuccess("Payment card added.");
+          const id =
+            typeof crypto !== "undefined" && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `card-${Date.now()}`;
+          setSavedPaymentCards((prev) => [
+            ...prev,
+            buildSubscriptionPaymentCard(id, values),
+          ]);
+          setLastAddedPaymentCardId(id);
+          if (lastAddedClearRef.current) clearTimeout(lastAddedClearRef.current);
+          lastAddedClearRef.current = setTimeout(() => {
+            setLastAddedPaymentCardId(null);
+            lastAddedClearRef.current = null;
+          }, 4500);
+          setAddPaymentCardOpen(false);
+          setCreateOpen(true);
+        }}
       />
       <EditCustomerInformationModal
         key={`edit-customer-${customerFormKey}`}

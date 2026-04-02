@@ -1,11 +1,11 @@
 "use client";
 
 import {
-  Banknote,
   Check,
   ChevronDown,
   ChevronUp,
   Info,
+  Minus,
   MoreVertical,
   Pencil,
   Plus,
@@ -15,6 +15,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -44,7 +45,6 @@ import {
   DropdownMenuSearchScrollArea,
   SEARCHABLE_DROPDOWN_MENU_CONTENT_CLASS,
 } from "@/components/ui/dropdown-menu-search-panel";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -70,6 +70,10 @@ import {
 import { FigmaRadioIndicator } from "@/components/subscriptions/figma-radio-indicator";
 import type { CustomerFormValues } from "@/components/subscriptions/edit-customer-information-modal";
 import {
+  brandBadgeLabel,
+  type SubscriptionPaymentCard,
+} from "@/components/subscriptions/subscription-payment-card";
+import {
   aggregateLineItemTaxesForSummary,
   getLineTaxBreakdown,
   sumTaxLineAmounts,
@@ -83,9 +87,12 @@ const lineProductRowMenuItemClass =
 
 type PaymentMode = "live" | "test";
 
+function startOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
 function startOfToday() {
-  const t = new Date();
-  return new Date(t.getFullYear(), t.getMonth(), t.getDate());
+  return startOfDay(new Date());
 }
 
 type CreateSubscriptionModalProps = {
@@ -100,6 +107,8 @@ type CreateSubscriptionModalProps = {
   onRequestEditCustomer: (initialValues: CustomerFormValues) => void;
   /** Close create and open add-customer form (empty fields). */
   onRequestAddCustomer: () => void;
+  /** Close create and open add payment card modal (parent-owned). */
+  onRequestAddPaymentCard?: () => void;
   /** Close create and open tax modal — line row or subscription-wide (parent-owned). */
   onRequestAddLineItemTax: (
     payload:
@@ -131,6 +140,10 @@ type CreateSubscriptionModalProps = {
       }
     | null;
   onLineTaxPatchConsumed: () => void;
+  /** Cards added via Add payment card (parent); drives Pay via cards list (Figma 1164:198467). */
+  savedPaymentCards: SubscriptionPaymentCard[];
+  /** Parent sets briefly after save — highlight row + scroll into view. */
+  lastAddedPaymentCardId?: string | null;
 };
 
 function customerSaveSuccessMessage(t: { name: string; mode: "add" | "edit" }) {
@@ -177,10 +190,82 @@ const CATALOG_PRODUCT_NAMES = CATALOG_PRODUCTS.map((p) => p.name);
 
 const PRODUCT_TABLE_HDR_ICON = "size-4 shrink-0 object-contain";
 
+/** Figma 1164:180573 — Trial days beside frequency date range. */
+const TRIAL_DAYS_MIN = 1;
+const TRIAL_DAYS_MAX = 365;
+
+function clampTrialDays(n: number): number {
+  const f = Math.floor(Number(n));
+  if (!Number.isFinite(f)) return TRIAL_DAYS_MIN;
+  return Math.min(TRIAL_DAYS_MAX, Math.max(TRIAL_DAYS_MIN, f));
+}
+
 /** Line quantity: natural numbers (integers ≥ 1) only. */
 function naturalQty(n: number): number {
   const f = Math.floor(Number(n));
   return Number.isFinite(f) && f >= 1 ? f : 1;
+}
+
+/** Truncated product name — tooltip with full label only when overflow (table column). */
+function LineItemProductNameTruncatingTooltip({
+  text,
+  className,
+  /** Re-run overflow check when row layout changes (e.g. catalog dropdown open). */
+  measureKey,
+}: {
+  text: string;
+  className?: string;
+  measureKey?: boolean;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [overflow, setOverflow] = useState(false);
+
+  const measure = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    setOverflow(el.scrollWidth > el.clientWidth + 1);
+  }, []);
+
+  useLayoutEffect(() => {
+    measure();
+  }, [text, measureKey, measure]);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [measure]);
+
+  const span = (
+    <span
+      ref={ref}
+      onMouseEnter={measure}
+      className={cn("min-w-0 flex-1 truncate text-base", className)}
+    >
+      {text}
+    </span>
+  );
+
+  if (!overflow) return span;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{span}</TooltipTrigger>
+      <TooltipContent
+        side="top"
+        sideOffset={4}
+        className={cn(
+          "z-[210] max-w-[min(280px,calc(100vw-2rem))] text-left",
+          invoiceDarkTooltipClassName
+        )}
+      >
+        <span className="block break-words">{text}</span>
+        <TooltipArrow />
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 /** Mock catalog — amounts drive taxable subtotal when a coupon is applied. */
@@ -333,12 +418,20 @@ export function CreateSubscriptionModal({
   onCustomerSaveToastDismiss,
   onRequestEditCustomer,
   onRequestAddCustomer,
+  onRequestAddPaymentCard,
   onRequestAddLineItemTax,
   lineTaxPatch,
   onLineTaxPatchConsumed,
+  savedPaymentCards,
+  lastAddedPaymentCardId = null,
 }: CreateSubscriptionModalProps) {
   const { showSuccess, showError } = useHubToast();
   const customerSelectId = useId();
+  const frequencyStartDateId = useId();
+  const frequencyEndDateId = useId();
+  const businessTaxIdInputId = useId();
+  const trialDaysLabelId = useId();
+  const trialDaysInputId = useId();
   const [createToastPortalReady] = useState(true);
   const customerSaveToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
@@ -360,6 +453,17 @@ export function CreateSubscriptionModal({
   /** Draft selection before clicking the check control. */
   const [couponDraft, setCouponDraft] = useState<string | null>(null);
 
+  const [subscriptionSettingsOpen, setSubscriptionSettingsOpen] = useState(true);
+  const [additionalOpen, setAdditionalOpen] = useState(true);
+
+  const [setFrequency, setSetFrequency] = useState(false);
+  const [taxId, setTaxId] = useState(false);
+  /** Additional options — Figma 1164:180573 (frequency row + tax ID field). */
+  const [frequencyStartDate, setFrequencyStartDate] = useState(startOfToday);
+  const [frequencyEndDate, setFrequencyEndDate] = useState(startOfToday);
+  const [trialDays, setTrialDays] = useState(12);
+  const [businessTaxId, setBusinessTaxId] = useState("");
+
   const selectedCustomer = useMemo(
     () => (customer ? findCustomerById(customer) : undefined),
     [customer]
@@ -379,7 +483,14 @@ export function CreateSubscriptionModal({
   const handleOpenChange = useCallback(
     (next: boolean) => {
       if (next) {
-        setStartDate(startOfToday());
+        const today = startOfToday();
+        setStartDate(today);
+        setFrequencyStartDate(today);
+        setFrequencyEndDate(today);
+        setTrialDays(12);
+        setBusinessTaxId("");
+        setSetFrequency(false);
+        setTaxId(false);
         setSubscriptionTaxAdded(false);
         setSubscriptionDiscountAdded(false);
         setAppliedCouponCode("SUMMER20");
@@ -441,14 +552,6 @@ export function CreateSubscriptionModal({
     return { ...fromProfile, ...customerEditFields };
   }, [selectedCustomer, customerEditFields]);
 
-  const [subscriptionSettingsOpen, setSubscriptionSettingsOpen] = useState(true);
-  const [additionalOpen, setAdditionalOpen] = useState(true);
-  const [paymentSectionOpen, setPaymentSectionOpen] = useState(true);
-
-  const [setFrequency, setSetFrequency] = useState(false);
-  const [taxId, setTaxId] = useState(false);
-  const [giftCard, setGiftCard] = useState(true);
-
   const [productRows, setProductRows] = useState<ProductLineItem[]>([]);
   /** Which row’s catalog dropdown is open — Figma 1161:94547; new rows open on add (1161:93520). */
   const [productPickerRowId, setProductPickerRowId] = useState<string | null>(
@@ -456,10 +559,40 @@ export function CreateSubscriptionModal({
   );
   const [productPickerSearch, setProductPickerSearch] = useState("");
   const productCatalogSearchId = useId();
-  const [selectedPaymentCard, setSelectedPaymentCard] = useState<
-    "visa" | "mastercard" | "apple"
-  >("visa");
-  const [giftCardCode, setGiftCardCode] = useState("ABCD123");
+  const [selectedPaymentCardId, setSelectedPaymentCardId] = useState<
+    string | null
+  >(null);
+  const savedCardsLenRef = useRef(0);
+
+  useEffect(() => {
+    const n = savedPaymentCards.length;
+    if (n === 0) {
+      setSelectedPaymentCardId(null);
+      savedCardsLenRef.current = 0;
+      return;
+    }
+    if (n > savedCardsLenRef.current) {
+      setSelectedPaymentCardId(savedPaymentCards[n - 1]!.id);
+      savedCardsLenRef.current = n;
+      return;
+    }
+    savedCardsLenRef.current = n;
+    setSelectedPaymentCardId((prev) =>
+      prev != null && savedPaymentCards.some((c) => c.id === prev)
+        ? prev
+        : savedPaymentCards[0]!.id
+    );
+  }, [savedPaymentCards]);
+
+  useEffect(() => {
+    if (!open || !lastAddedPaymentCardId) return;
+    const t = window.setTimeout(() => {
+      document
+        .querySelector(`[data-payment-card-id="${lastAddedPaymentCardId}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 120);
+    return () => clearTimeout(t);
+  }, [open, lastAddedPaymentCardId, savedPaymentCards.length]);
 
   const filteredCatalogProducts = useMemo(() => {
     const q = productPickerSearch.trim().toLowerCase();
@@ -503,10 +636,26 @@ export function CreateSubscriptionModal({
   /** First row must have a catalog / item name before adding another line (empty state still allows the first row). */
   const canPrependProductRow =
     productRows.length === 0 || productRows[0].name.trim().length > 0;
-  const canCreate =
+
+  const frequencyDateRangeInvalid = useMemo(() => {
+    if (!setFrequency) return false;
+    return (
+      startOfDay(frequencyStartDate).getTime() >
+      startOfDay(frequencyEndDate).getTime()
+    );
+  }, [setFrequency, frequencyStartDate, frequencyEndDate]);
+
+  const baseCanCreate =
     hasLineItems &&
     Boolean(selectedCustomer) &&
     productRows.every((r) => r.name.trim().length > 0);
+
+  const canCreate =
+    baseCanCreate &&
+    (!setFrequency || !frequencyDateRangeInvalid) &&
+    (!taxId || businessTaxId.trim().length > 0) &&
+    (!hasLineItems ||
+      (savedPaymentCards.length > 0 && selectedPaymentCardId != null));
 
   const openCouponMenu = useCallback(() => {
     setCouponBarOpen(true);
@@ -838,7 +987,11 @@ export function CreateSubscriptionModal({
 
               <div className="overflow-hidden rounded border border-[#d0d5dd] shadow-[0px_1px_2px_0px_rgba(16,24,40,0.05)]">
                 <div className="overflow-x-auto">
-                  <div className="min-w-[720px]">
+                  <div
+                    className={
+                      productRows.length === 0 ? "min-w-[712px]" : "min-w-[760px]"
+                    }
+                  >
                     <div className="flex h-9 w-full min-w-0 shrink-0 border-b border-[#d0d5dd] bg-[#f2f4f7] text-base font-semibold leading-6 text-[#101828]">
                       <div className="flex h-9 min-w-0 flex-1 items-center gap-1 border-r border-[#d0d5dd] px-3">
                         <img
@@ -873,7 +1026,7 @@ export function CreateSubscriptionModal({
                         />
                         <span className="tabular-nums">Qty</span>
                       </div>
-                      <div className="flex h-9 w-[87px] shrink-0 items-center gap-1 border-r border-[#d0d5dd] px-3">
+                      <div className="flex h-9 w-[127px] shrink-0 items-center gap-1 border-r border-[#d0d5dd] px-3">
                         <img
                           src="/icons/subscriptions/sell.svg"
                           alt=""
@@ -884,7 +1037,12 @@ export function CreateSubscriptionModal({
                         />
                         Tax
                       </div>
-                      <div className="flex h-9 w-[130px] shrink-0 items-center justify-end gap-1 border-r border-[#d0d5dd] px-3">
+                      <div
+                        className={cn(
+                          "flex h-9 w-[130px] shrink-0 items-center justify-end gap-1 px-3",
+                          productRows.length > 0 && "border-r border-[#d0d5dd]"
+                        )}
+                      >
                         <img
                           src="/icons/subscriptions/paid.svg"
                           alt=""
@@ -895,16 +1053,18 @@ export function CreateSubscriptionModal({
                         />
                         Subtotal
                       </div>
-                      <div className="flex h-9 w-12 shrink-0 items-center justify-center border-[#d0d5dd] px-2">
-                        <img
-                          src="/icons/subscriptions/highlight-mouse-cursor.svg"
-                          alt=""
-                          className="size-5 shrink-0"
-                          width={20}
-                          height={20}
-                          aria-hidden
-                        />
-                      </div>
+                      {productRows.length > 0 ? (
+                        <div className="flex h-9 w-12 shrink-0 items-center justify-center border-[#d0d5dd] px-2">
+                          <img
+                            src="/icons/subscriptions/highlight-mouse-cursor.svg"
+                            alt=""
+                            className="size-5 shrink-0"
+                            width={20}
+                            height={20}
+                            aria-hidden
+                          />
+                        </div>
+                      ) : null}
                     </div>
 
                     {productRows.length === 0 ? (
@@ -994,20 +1154,21 @@ export function CreateSubscriptionModal({
                                         !hasItemName && "py-1.5"
                                       )}
                                     >
-                                      <span
-                                        className={cn(
-                                          "min-w-0 flex-1 truncate text-base",
-                                          hasItemName && !isProductPickerOpen
-                                            ? "font-medium text-[#475467]"
-                                            : hasItemName
-                                              ? "font-medium text-[#101828]"
-                                              : "font-medium text-[#667085]"
-                                        )}
-                                      >
-                                        {hasItemName
-                                          ? row.name
-                                          : "Select product"}
-                                      </span>
+                                      {hasItemName ? (
+                                        <LineItemProductNameTruncatingTooltip
+                                          text={row.name}
+                                          measureKey={isProductPickerOpen}
+                                          className={
+                                            !isProductPickerOpen
+                                              ? "font-medium text-[#475467]"
+                                              : "font-medium text-[#101828]"
+                                          }
+                                        />
+                                      ) : (
+                                        <span className="min-w-0 flex-1 truncate text-base font-medium text-[#667085]">
+                                          Select product
+                                        </span>
+                                      )}
                                       <ChevronDown
                                         className="size-4 shrink-0 text-[#667085]"
                                         strokeWidth={2}
@@ -1148,7 +1309,7 @@ export function CreateSubscriptionModal({
                                   )}
                                 />
                               </div>
-                              <div className="flex h-9 w-[87px] shrink-0 items-center border-r border-[#d0d5dd] px-3">
+                              <div className="flex h-9 w-[127px] shrink-0 items-center border-r border-[#d0d5dd] px-3">
                                 {row.taxPercent != null ? (
                                   <div className="flex min-w-0 flex-1 items-center gap-0.5">
                                     <button
@@ -1663,199 +1824,301 @@ export function CreateSubscriptionModal({
               onToggle={() => setAdditionalOpen((v) => !v)}
             />
             {additionalOpen ? (
-              <div className="mt-6 space-y-6">
-                <div className="flex items-center gap-1">
+              <div className="mt-6 flex flex-col gap-6">
+                <div className="flex items-start gap-1">
                   <SwitchToggle
                     pressed={setFrequency}
-                    onPressedChange={setSetFrequency}
+                    onPressedChange={(next) => {
+                      setSetFrequency(next);
+                      if (!next) {
+                        const t = startOfToday();
+                        setFrequencyStartDate(t);
+                        setFrequencyEndDate(t);
+                        setTrialDays(12);
+                      }
+                    }}
                   />
-                  <span className="text-base leading-6 text-[#101828]">Set frequency</span>
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <span className="text-base leading-6 text-[#101828]">
+                      Set frequency
+                    </span>
+                    {setFrequency ? (
+                      <div className="flex w-full min-w-0 flex-col gap-2">
+                        <div className="flex flex-wrap items-end gap-4">
+                        <div className="w-full min-w-[180px] flex-1 space-y-1 sm:w-[180px] sm:flex-none">
+                          <label
+                            htmlFor={frequencyStartDateId}
+                            className="flex gap-1 text-base font-medium leading-6 text-[#101828]"
+                          >
+                            <span>Start date</span>
+                            <span className="text-[#d92d20]">*</span>
+                          </label>
+                          <FigmaDatePickerField
+                            value={frequencyStartDate}
+                            onChange={setFrequencyStartDate}
+                            id={frequencyStartDateId}
+                            aria-label="Frequency start date"
+                            invalid={frequencyDateRangeInvalid}
+                          />
+                        </div>
+                        <div className="w-full min-w-[180px] flex-1 space-y-1 sm:w-[180px] sm:flex-none">
+                          <label
+                            htmlFor={frequencyEndDateId}
+                            className="flex gap-1 text-base font-medium leading-6 text-[#101828]"
+                          >
+                            <span>End date</span>
+                            <span className="text-[#d92d20]">*</span>
+                          </label>
+                          <FigmaDatePickerField
+                            value={frequencyEndDate}
+                            onChange={setFrequencyEndDate}
+                            id={frequencyEndDateId}
+                            aria-label="Frequency end date"
+                            invalid={frequencyDateRangeInvalid}
+                          />
+                        </div>
+                        <div className="flex w-full min-w-[200px] flex-col gap-1 sm:w-[200px]">
+                          <label
+                            id={trialDaysLabelId}
+                            htmlFor={trialDaysInputId}
+                            className="flex gap-1 text-base font-medium leading-6 text-[#101828]"
+                          >
+                            <span>Trial days</span>
+                            <span className="text-[#d92d20]">*</span>
+                          </label>
+                          {/* Stepper: − / value / + inside field shell. */}
+                          <div
+                            role="group"
+                            aria-labelledby={trialDaysLabelId}
+                            className={cn(
+                              "flex h-9 w-full min-w-0 items-center gap-1 rounded border border-[#d0d5dd] bg-white px-1.5 text-base leading-6 text-[#101828] shadow-[0px_1px_2px_0px_rgba(16,24,40,0.05)]",
+                              figmaFieldFocusWithin
+                            )}
+                          >
+                            <button
+                              type="button"
+                              aria-label="Decrease trial days"
+                              disabled={trialDays <= TRIAL_DAYS_MIN}
+                              onClick={() =>
+                                setTrialDays((d) =>
+                                  clampTrialDays(d - 1)
+                                )
+                              }
+                              className="inline-flex size-7 shrink-0 items-center justify-center rounded text-[#667085] outline-none hover:bg-[#f2f4f7] focus-visible:ring-2 focus-visible:ring-[#004eeb]/30 disabled:pointer-events-none disabled:opacity-40 disabled:hover:bg-transparent"
+                            >
+                              <Minus
+                                className="size-4 shrink-0"
+                                strokeWidth={2}
+                                aria-hidden
+                              />
+                            </button>
+                            <input
+                              id={trialDaysInputId}
+                              type="number"
+                              min={TRIAL_DAYS_MIN}
+                              max={TRIAL_DAYS_MAX}
+                              step={1}
+                              inputMode="numeric"
+                              autoComplete="off"
+                              className={cn(
+                                "min-w-0 flex-1 border-0 bg-transparent p-0 text-center text-base font-normal leading-6 text-[#101828] tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+                                figmaFieldInnerInput
+                              )}
+                              value={trialDays}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                if (raw === "") {
+                                  setTrialDays(TRIAL_DAYS_MIN);
+                                  return;
+                                }
+                                const n = parseInt(raw, 10);
+                                if (Number.isNaN(n)) return;
+                                setTrialDays(clampTrialDays(n));
+                              }}
+                            />
+                            <button
+                              type="button"
+                              aria-label="Increase trial days"
+                              disabled={trialDays >= TRIAL_DAYS_MAX}
+                              onClick={() =>
+                                setTrialDays((d) =>
+                                  clampTrialDays(d + 1)
+                                )
+                              }
+                              className="inline-flex size-7 shrink-0 items-center justify-center rounded text-[#667085] outline-none hover:bg-[#f2f4f7] focus-visible:ring-2 focus-visible:ring-[#004eeb]/30 disabled:pointer-events-none disabled:opacity-40 disabled:hover:bg-transparent"
+                            >
+                              <Plus
+                                className="size-4 shrink-0"
+                                strokeWidth={2}
+                                aria-hidden
+                              />
+                            </button>
+                          </div>
+                        </div>
+                        </div>
+                      {frequencyDateRangeInvalid ? (
+                        <p
+                          role="alert"
+                          className="text-sm font-medium leading-5 text-[#d92d20]"
+                        >
+                          End date must be on or after the start date.
+                        </p>
+                      ) : null}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <SwitchToggle pressed={taxId} onPressedChange={setTaxId} />
-                  <span className="text-base leading-6 text-[#101828]">
-                    Business identification number or tax ID
-                  </span>
+                <div className="flex items-start gap-1">
+                  <SwitchToggle
+                    pressed={taxId}
+                    onPressedChange={(next) => {
+                      setTaxId(next);
+                      if (!next) setBusinessTaxId("");
+                    }}
+                  />
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="text-base leading-6 text-[#101828]">
+                      Business identification number or tax ID
+                    </span>
+                    {taxId ? (
+                      <input
+                        id={businessTaxIdInputId}
+                        type="text"
+                        value={businessTaxId}
+                        onChange={(e) => setBusinessTaxId(e.target.value)}
+                        placeholder="Enter identification number"
+                        autoComplete="off"
+                        className={cn(
+                          "h-9 w-full max-w-[280px] rounded border border-[#d0d5dd] bg-white px-2 text-base font-normal leading-6 text-[#101828] shadow-[0px_1px_2px_0px_rgba(16,24,40,0.05)] placeholder:text-[#667085]",
+                          figmaFieldFocusVisible
+                        )}
+                      />
+                    ) : null}
+                  </div>
                 </div>
               </div>
             ) : null}
           </div>
 
-          <div className="py-6">
-            <SectionHeader
-              title="Select a payment method"
-              expanded={paymentSectionOpen}
-              onToggle={() => setPaymentSectionOpen((v) => !v)}
-            />
-            {paymentSectionOpen ? (
-              <div className="mt-6 space-y-6">
-                <div className="space-y-3">
+          {/* Payment — Pay via cards only; 24px top spacing only */}
+          <div className="pt-6">
+            <div className="flex flex-col gap-1.5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-1">
-                      <span className="text-base font-medium leading-6 text-[#101828]">
-                        Redeem a gift card
-                      </span>
-                      <Info
-                        className="size-3 text-[#667085]"
-                        aria-label="More about gift cards"
-                      />
-                    </div>
-                    <SwitchToggle
-                      pressed={giftCard}
-                      onPressedChange={setGiftCard}
-                    />
-                  </div>
-                  {hasLineItems && giftCard ? (
-                    <div className="space-y-2">
-                      <div
-                        className={cn(
-                          "flex h-9 w-full max-w-full overflow-hidden rounded-md border border-[#d0d5dd] bg-white shadow-[0px_1px_2px_0px_rgba(16,24,40,0.05)] sm:max-w-md",
-                          figmaFieldFocusWithin
-                        )}
-                      >
-                        <input
-                          type="text"
-                          value={giftCardCode}
-                          onChange={(e) => setGiftCardCode(e.target.value)}
-                          className={cn(
-                            "min-w-0 flex-1 border-r border-[#d0d5dd] px-2 text-base text-[#101828]",
-                            figmaFieldInnerInput
-                          )}
-                          placeholder="Gift card code"
-                          aria-label="Gift card code"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => showSuccess("Gift card applied.")}
-                          className="shrink-0 px-3.5 py-2 text-base font-semibold text-[#344054] hover:bg-slate-50"
-                        >
-                          Apply
-                        </button>
-                      </div>
-                      <p className="text-sm leading-5 text-[#475467]">
-                        <span className="inline-flex size-3.5 items-center justify-center align-middle">
-                          <Banknote className="size-3.5 text-[#475467]" aria-hidden />
-                        </span>{" "}
-                        Gift card applied:{" "}
-                        <span className="font-medium text-[#101828]">$80</span> (initial
-                        balance is $100)
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <p className="text-base font-semibold leading-6 text-[#101828]">
+                        Pay via cards
                       </p>
-                      <div className="flex flex-wrap items-center gap-2 text-sm text-[#475467]">
-                        <span>Amount left to pay:</span>
-                        <span className="font-medium text-[#101828]">$150</span>
-                        <Info className="size-3 text-[#667085]" aria-hidden />
-                      </div>
+                      {savedPaymentCards.length > 0 ? (
+                        <span
+                          className="inline-flex h-6 min-w-6 shrink-0 items-center justify-center align-middle rounded-[4px] bg-[#f2f4f7] px-2 text-sm font-medium leading-5 text-[#344054] tabular-nums"
+                          aria-label={`${savedPaymentCards.length} saved ${savedPaymentCards.length === 1 ? "card" : "cards"}`}
+                          aria-live="polite"
+                        >
+                          {savedPaymentCards.length}
+                        </span>
+                      ) : null}
                     </div>
-                  ) : null}
-                </div>
-                <div>
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-base font-medium leading-6 text-[#101828]">
-                      Pay via cards
-                    </p>
-                    {hasLineItems ? (
+                    {hasLineItems || savedPaymentCards.length > 0 ? (
                       <button
                         type="button"
-                        onClick={() => showSuccess("Add new card flow.")}
-                        className="inline-flex items-center gap-2 text-base font-semibold text-[#004eeb] transition-opacity hover:opacity-90"
+                        onClick={() => onRequestAddPaymentCard?.()}
+                        className="inline-flex items-center gap-2 text-base font-medium leading-6 text-[#004eeb] outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[#004eeb]/30"
                       >
                         <Plus className="size-5 shrink-0" strokeWidth={2} aria-hidden />
                         Add new card
                       </button>
                     ) : null}
                   </div>
-                  {hasLineItems ? (
-                    <div className="flex flex-col gap-2">
-                      {(
-                        [
-                          {
-                            id: "visa" as const,
-                            title: "Visa ending in 1234",
-                            sub: "Saved with PayPal",
-                            brand: "Visa",
-                          },
-                          {
-                            id: "mastercard" as const,
-                            title: "Mastercard credit ending in 1234",
-                            sub: "Saved with Stripe",
-                            brand: "MC",
-                          },
-                          {
-                            id: "apple" as const,
-                            title: "Apple Pay ending in 1234",
-                            sub: "Saved with Authorize.net",
-                            brand: "Apple Pay",
-                          },
-                        ] as const
-                      ).map((card) => (
-                        <button
-                          key={card.id}
-                          type="button"
-                          onClick={() => setSelectedPaymentCard(card.id)}
-                          className={cn(
-                            "flex w-full items-center gap-2 rounded border px-3 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-[#004eeb]/30",
-                            selectedPaymentCard === card.id
-                              ? "border-[#155eef] bg-white"
-                              : "border-[#eaecf0] bg-white"
-                          )}
-                        >
-                          <div className="flex h-9 w-12 shrink-0 items-center justify-center rounded border border-[#eaecf0] bg-white text-xs font-semibold text-[#344054]">
-                            {card.brand}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-base font-medium leading-6 text-[#101828]">
-                              {card.title}
-                            </p>
-                            <p className="text-sm leading-5 text-[#475467]">{card.sub}</p>
-                          </div>
-                          <span
+
+                  {savedPaymentCards.length > 0 ? (
+                    <div
+                      className="flex flex-col gap-2"
+                      role="radiogroup"
+                      aria-label="Saved payment cards"
+                    >
+                      {savedPaymentCards.map((card) => {
+                        const isSelected = selectedPaymentCardId === card.id;
+                        const isJustAdded = lastAddedPaymentCardId === card.id;
+                        return (
+                          <button
+                            key={card.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={isSelected}
+                            data-payment-card-id={card.id}
+                            onClick={() => setSelectedPaymentCardId(card.id)}
                             className={cn(
-                              "flex size-4 shrink-0 items-center justify-center rounded-[8px] border",
-                              selectedPaymentCard === card.id
-                                ? "border-[#155eef] bg-[#155eef]"
-                                : "border-[#98a2b3] bg-white"
+                              "flex w-full items-center gap-2 rounded border border-solid px-3 py-2 text-left outline-none transition-[box-shadow,border-color] duration-200 focus-visible:ring-2 focus-visible:ring-[#004eeb]/30",
+                              isJustAdded &&
+                                "animate-in fade-in zoom-in-95 duration-300",
+                              isSelected
+                                ? "border-[#155eef] bg-white"
+                                : "border-[#eaecf0] bg-white",
+                              isJustAdded &&
+                                "ring-2 ring-[#155eef]/35 ring-offset-2 ring-offset-white"
                             )}
-                            aria-hidden
                           >
-                            {selectedPaymentCard === card.id ? (
-                              <Check className="size-3 text-white" strokeWidth={3} />
-                            ) : null}
-                          </span>
-                        </button>
-                      ))}
+                            <div className="flex h-9 w-12 shrink-0 items-center justify-center rounded border border-[#eaecf0] bg-white text-xs font-semibold text-[#344054]">
+                              {brandBadgeLabel(card.brand)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-base font-medium leading-6 text-[#101828]">
+                                {card.title}
+                              </p>
+                              <p className="text-sm leading-5 text-[#475467]">
+                                {card.subtitle}
+                              </p>
+                            </div>
+                            <span
+                              className={cn(
+                                "flex size-4 shrink-0 items-center justify-center rounded-[8px] border",
+                                isSelected
+                                  ? "border-[#155eef] bg-[#155eef]"
+                                  : "border-[#98a2b3] bg-white"
+                              )}
+                              aria-hidden
+                            >
+                              {isSelected ? (
+                                <Check className="size-3 text-white" strokeWidth={3} />
+                              ) : null}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center rounded border border-[#d0d5dd] p-4">
-                      <div className="mb-2 flex size-[120px] items-center justify-center">
-                        <img
-                          src="/icons/empty-state-payment-cards.svg"
-                          alt=""
-                          width={120}
-                          height={120}
-                          className="size-[120px] shrink-0 object-contain"
-                          aria-hidden
-                        />
+                    <div className="flex w-full flex-col items-center rounded border-[0.5px] border-[#d0d5dd] bg-white p-4">
+                      <div className="flex w-full flex-col items-center gap-2">
+                        <div className="flex size-[120px] shrink-0 items-center justify-center">
+                          <img
+                            src="/icons/empty-state-payment-cards.svg"
+                            alt=""
+                            width={120}
+                            height={120}
+                            className="size-[120px] object-contain"
+                            aria-hidden
+                          />
+                        </div>
+                        <div className="flex w-full max-w-[404px] flex-col items-center gap-1 text-center">
+                          <p className="text-base font-semibold leading-6 text-[#101828]">
+                            No cards found
+                          </p>
+                          <p className="text-sm font-normal leading-5 text-[#475467]">
+                            Save your first payment card here for quicker payments later.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onRequestAddPaymentCard?.()}
+                          className="inline-flex items-center gap-2 rounded-lg border border-[#d0d5dd] bg-white px-3.5 py-2 text-base font-semibold leading-6 text-[#344054] shadow-[0px_1px_2px_0px_rgba(16,24,40,0.05)] outline-none hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-[#004eeb]/30"
+                        >
+                          <Plus className="size-5 shrink-0" strokeWidth={2} aria-hidden />
+                          Add customer&apos;s card
+                        </button>
                       </div>
-                      <p className="text-center text-base font-semibold leading-6 text-[#101828]">
-                        No cards found
-                      </p>
-                      <p className="mt-1 max-w-[404px] text-center text-sm leading-5 text-[#475467]">
-                        Save your first payment card here for quicker payments later.
-                      </p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => showSuccess("Add card flow would open here.")}
-                        className="mt-2 h-auto gap-2 rounded-lg border-[#d0d5dd] bg-white px-3.5 py-2 text-base font-semibold text-[#344054] shadow-[0px_1px_2px_0px_rgba(16,24,40,0.05)]"
-                      >
-                        <Plus className="size-5" strokeWidth={2} aria-hidden />
-                        Add customer&apos;s card
-                      </Button>
                     </div>
                   )}
-                </div>
-              </div>
-            ) : null}
+            </div>
           </div>
         </div>
         </TooltipProvider>

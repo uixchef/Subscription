@@ -50,16 +50,25 @@ function TooltipContent({
   );
 }
 
-/** Figma Invoices / Estimates — Tooltip (node 1300:463157): dark surface + arrow fill. */
+/**
+ * Figma Invoices / Estimates — Tooltip caret (node 1300:463157): 16×6, fill matches surface.
+ * Radix’s default arrow often shows a hairline seam vs the panel; nudging the SVG up overlaps
+ * the panel edge so the background does not show through (see node 1300:463157).
+ */
 function TooltipArrow({
   className,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Arrow>) {
   return (
     <TooltipPrimitive.Arrow
-      className={cn("fill-[#101828]", className)}
-      width={11}
-      height={5}
+      className={cn(
+        "fill-[#101828] [shape-rendering:geometricPrecision]",
+        /* Overlap the panel bottom edge (~2px) so the seam does not show through */
+        "-translate-y-0.5",
+        className
+      )}
+      height={6}
+      width={16}
       {...props}
     />
   );
