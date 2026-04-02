@@ -74,6 +74,16 @@ export function appendCreatedSubscription(row: SubscriptionRow): void {
   saveCreatedSubscriptions([row, ...prev]);
 }
 
+/** Replace an existing user-created row by id (Update subscription flow). */
+export function replaceCreatedSubscription(row: SubscriptionRow): void {
+  const prev = loadCreatedSubscriptions();
+  const idx = prev.findIndex((r) => r.id === row.id);
+  if (idx === -1) return;
+  const next = [...prev];
+  next[idx] = row;
+  saveCreatedSubscriptions(next);
+}
+
 export function subscribeCreatedSubscriptions(callback: () => void): () => void {
   if (typeof window === "undefined") return () => {};
   const run = () => callback();

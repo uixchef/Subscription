@@ -12,6 +12,14 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { useHubToast } from "@/components/payment-hub/hub-toast";
+import {
+  CreateSubscriptionModal,
+} from "@/components/subscriptions/create-subscription-modal";
+import {
+  CUSTOMER_DEMO_PROFILES,
+  type CustomerDemoProfile,
+} from "@/components/subscriptions/customer-demo-data";
+import { loadCustomerDirectoryFromStorage } from "@/components/subscriptions/customer-directory-storage";
 import { CancelSubscriptionModal } from "@/components/subscriptions/cancel-subscription-modal";
 import { PauseNotificationModal } from "@/components/subscriptions/pause-notification-modal";
 import {
@@ -25,6 +33,10 @@ import {
   loadCreatedSubscriptions,
   subscribeCreatedSubscriptions,
 } from "@/components/subscriptions/created-subscriptions-storage";
+import {
+  loadSubscriptionRowUpdates,
+  subscribeSubscriptionRowUpdates,
+} from "@/components/subscriptions/subscription-row-updates-storage";
 import { SUBSCRIPTION_TOTAL_ROWS } from "@/components/subscriptions/subscriptions-constants";
 import {
   buildSubscriptionRow,
@@ -91,6 +103,7 @@ function SubscriptionRowActions({
   onPauseConfirmed,
   onResume,
   onCancelConfirmed,
+  onRequestUpdate,
 }: {
   customerName: string;
   subscriptionId: string;
@@ -104,6 +117,7 @@ function SubscriptionRowActions({
   ) => void;
   onResume: (subscriptionId: string) => void;
   onCancelConfirmed: (subscriptionId: string) => void;
+  onRequestUpdate: () => void;
 }) {
   const [pauseModalOpen, setPauseModalOpen] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -186,7 +200,7 @@ function SubscriptionRowActions({
       key="update"
       className={rowActionItemClass}
       onSelect={() => {
-        showError(hubFeatureUnavailableMessage("Update subscription"));
+        onRequestUpdate();
       }}
     >
       <RefreshCw className={rowActionIconClass} strokeWidth={2} aria-hidden />
@@ -461,6 +475,7 @@ function SubscriptionsTableEmptyState() {
 }
 
 export function SubscriptionsTable() {
+  const { showError } = useHubToast();
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
   /** Row id → status before pause (for restoring on Resume). */
@@ -471,6 +486,31 @@ export function SubscriptionsTable() {
   const [canceledIds, setCanceledIds] = useState<Record<string, boolean>>({});
   const [overridesHydrated, setOverridesHydrated] = useState(false);
   const [createdRows, setCreatedRows] = useState<SubscriptionRow[]>([]);
+  const [rowUpdates, setRowUpdates] = useState<
+    Record<string, SubscriptionRow>
+  >({});
+  const [updateTargetRow, setUpdateTargetRow] =
+    useState<SubscriptionRow | null>(null);
+  const [customers, setCustomers] = useState<CustomerDemoProfile[]>(() => [
+    ...CUSTOMER_DEMO_PROFILES,
+  ]);
+
+  useEffect(() => {
+    const stored = loadCustomerDirectoryFromStorage();
+    queueMicrotask(() => {
+      if (stored) setCustomers(stored);
+    });
+  }, []);
+
+  useEffect(() => {
+    queueMicrotask(() => setRowUpdates(loadSubscriptionRowUpdates()));
+  }, []);
+
+  useEffect(() => {
+    return subscribeSubscriptionRowUpdates(() => {
+      setRowUpdates(loadSubscriptionRowUpdates());
+    });
+  }, []);
 
   useEffect(() => {
     const o = loadSubscriptionUiOverrides();
@@ -507,11 +547,12 @@ export function SubscriptionsTable() {
   }, []);
 
   const allRows = useMemo(() => {
-    const mock = Array.from({ length: SUBSCRIPTION_TOTAL_ROWS }, (_, i) =>
-      buildSubscriptionRow(i)
-    );
+    const mock = Array.from({ length: SUBSCRIPTION_TOTAL_ROWS }, (_, i) => {
+      const row = buildSubscriptionRow(i);
+      return rowUpdates[row.id] ?? row;
+    });
     return [...createdRows, ...mock];
-  }, [createdRows]);
+  }, [createdRows, rowUpdates]);
 
   const totalRowCount = allRows.length;
 
@@ -731,6 +772,7 @@ export function SubscriptionsTable() {
                                   ? "Paused"
                                   : row.status
                             }
+                            onRequestUpdate={() => setUpdateTargetRow(row)}
                             onPauseConfirmed={(
                               subscriptionId,
                               previousStatus
@@ -855,6 +897,32 @@ export function SubscriptionsTable() {
           </nav>
         </div>
       ) : null}
+
+      <CreateSubscriptionModal
+        key={`table-update-${updateTargetRow?.id ?? "x"}`}
+        open={updateTargetRow !== null}
+        onOpenChange={(next) => {
+          if (!next) setUpdateTargetRow(null);
+        }}
+        mode="update"
+        initialSubscriptionRow={updateTargetRow}
+        customers={customers}
+        initialCustomerId={null}
+        customerEditFields={null}
+        onCustomerEditFieldsChange={() => {}}
+        customerSaveToast={null}
+        onCustomerSaveToastDismiss={() => {}}
+        onRequestEditCustomer={() =>
+          showError(hubFeatureUnavailableMessage("Edit customer"))
+        }
+        onRequestAddCustomer={() =>
+          showError(hubFeatureUnavailableMessage("Add customer"))
+        }
+        lineTaxPatch={null}
+        onLineTaxPatchConsumed={() => {}}
+        savedPaymentCards={[]}
+        onSubscriptionUpdated={() => {}}
+      />
     </div>
   );
 }

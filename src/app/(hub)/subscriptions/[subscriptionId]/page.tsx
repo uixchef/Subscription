@@ -7,6 +7,7 @@ import { SubscriptionDetailHeader } from "@/components/subscriptions/subscriptio
 import { SubscriptionDetailViewWithOverrides } from "@/components/subscriptions/subscription-detail-view-with-overrides";
 import { subscribeCreatedSubscriptions } from "@/components/subscriptions/created-subscriptions-storage";
 import { resolveSubscriptionRow } from "@/components/subscriptions/resolve-subscription-row";
+import { subscribeSubscriptionRowUpdates } from "@/components/subscriptions/subscription-row-updates-storage";
 import type { SubscriptionRow } from "@/components/subscriptions/subscription-row-model";
 
 export default function SubscriptionDetailPage() {
@@ -21,7 +22,12 @@ export default function SubscriptionDetailPage() {
       sync();
       setReady(true);
     });
-    return subscribeCreatedSubscriptions(sync);
+    const unsubCreated = subscribeCreatedSubscriptions(sync);
+    const unsubUpdates = subscribeSubscriptionRowUpdates(sync);
+    return () => {
+      unsubCreated();
+      unsubUpdates();
+    };
   }, [subscriptionId]);
 
   if (!ready) {

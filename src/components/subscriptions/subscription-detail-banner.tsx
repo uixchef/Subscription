@@ -8,7 +8,10 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import type { SubscriptionStatus } from "@/components/subscriptions/subscription-row-model";
+import type {
+  SubscriptionRow,
+  SubscriptionStatus,
+} from "@/components/subscriptions/subscription-row-model";
 import { SubscriptionDetailBannerActions } from "@/components/subscriptions/subscription-detail-banner-actions";
 import { formatDateMMDDYYYY, parseMMDDYYYY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
@@ -120,12 +123,14 @@ export function SubscriptionDetailBanner({
   amount,
   createdOn,
   subscriptionId,
+  subscriptionRow,
 }: {
   displayStatus: SubscriptionStatus;
   baseStatus: SubscriptionStatus;
   amount: string;
   createdOn: string;
   subscriptionId: string;
+  subscriptionRow: SubscriptionRow;
 }) {
   const theme = bannerThemes[displayStatus];
   const Icon = theme.icon;
@@ -164,6 +169,7 @@ export function SubscriptionDetailBanner({
           subscriptionId={subscriptionId}
           displayStatus={displayStatus}
           baseStatus={baseStatus}
+          subscriptionRow={subscriptionRow}
         />
       </div>
       <div className="flex shrink-0 flex-col items-end gap-0.5 whitespace-nowrap text-[#101828]">

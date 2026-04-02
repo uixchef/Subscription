@@ -62,3 +62,41 @@ export function buildSubscriptionRowFromCreateModal(args: {
     createdProductLines: lines.length > 0 ? lines : undefined,
   };
 }
+
+/**
+ * Applies Create/Update modal snapshot onto an existing subscription row (id, dates, provider, status preserved).
+ */
+export function mergeSubscriptionRowFromUpdateModal(args: {
+  existing: SubscriptionRow;
+  customerName: string;
+  customerAvatarBg?: string;
+  productNames: string[];
+  productLines: CreatedProductLineSnapshot[];
+  amount: number;
+  paymentMode: SubscriptionPaymentMode;
+}): SubscriptionRow {
+  const names = args.productNames.map((n) => n.trim()).filter(Boolean);
+  let source = "Subscription";
+  if (names.length === 1) source = names[0]!;
+  else if (names.length > 1)
+    source = `${names[0]!} +${names.length - 1} more`;
+
+  const lines: CreatedProductLineSnapshot[] = args.productLines.map((l) => ({
+    name: l.name.trim(),
+    price: l.price,
+    qty: naturalQty(l.qty),
+    taxPercent: l.taxPercent,
+  }));
+
+  return {
+    ...args.existing,
+    customer: {
+      name: args.customerName.trim() || args.existing.customer.name,
+      avatarBg: args.customerAvatarBg ?? args.existing.customer.avatarBg,
+    },
+    source,
+    amount: formatUsd(args.amount),
+    paymentMode: args.paymentMode,
+    createdProductLines: lines.length > 0 ? lines : undefined,
+  };
+}

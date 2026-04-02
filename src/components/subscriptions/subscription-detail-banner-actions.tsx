@@ -1,8 +1,14 @@
 "use client";
 
 import { ChevronDown, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import { CreateSubscriptionModal } from "@/components/subscriptions/create-subscription-modal";
+import {
+  CUSTOMER_DEMO_PROFILES,
+  type CustomerDemoProfile,
+} from "@/components/subscriptions/customer-demo-data";
+import { loadCustomerDirectoryFromStorage } from "@/components/subscriptions/customer-directory-storage";
 import { CancelSubscriptionModal } from "@/components/subscriptions/cancel-subscription-modal";
 import { PauseNotificationModal } from "@/components/subscriptions/pause-notification-modal";
 import {
@@ -13,7 +19,10 @@ import {
 } from "@/components/subscriptions/pause-subscription-messages";
 import { ResumeSubscriptionModal } from "@/components/subscriptions/resume-subscription-modal";
 import { useHubToast } from "@/components/payment-hub/hub-toast";
-import type { SubscriptionStatus } from "@/components/subscriptions/subscription-row-model";
+import type {
+  SubscriptionRow,
+  SubscriptionStatus,
+} from "@/components/subscriptions/subscription-row-model";
 import {
   applyCancelSubscription,
   applyPauseSubscription,
@@ -42,17 +51,31 @@ export function SubscriptionDetailBannerActions({
   subscriptionId,
   displayStatus,
   baseStatus,
+  subscriptionRow,
 }: {
   subscriptionId: string;
   /** Effective status (paused/canceled overlays). */
   displayStatus: SubscriptionStatus;
   /** Status from subscription data (never Paused). */
   baseStatus: SubscriptionStatus;
+  /** Current row snapshot for Update subscription modal. */
+  subscriptionRow: SubscriptionRow;
 }) {
   const { showError, showSuccess } = useHubToast();
   const [pauseModalOpen, setPauseModalOpen] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [resumeModalOpen, setResumeModalOpen] = useState(false);
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [customers, setCustomers] = useState<CustomerDemoProfile[]>(() => [
+    ...CUSTOMER_DEMO_PROFILES,
+  ]);
+
+  useEffect(() => {
+    const stored = loadCustomerDirectoryFromStorage();
+    queueMicrotask(() => {
+      if (stored) setCustomers(stored);
+    });
+  }, []);
 
   if (displayStatus === "Canceled") {
     return null;
@@ -83,6 +106,29 @@ export function SubscriptionDetailBannerActions({
 
   const modals = (
     <>
+      <CreateSubscriptionModal
+        key={`update-sub-${subscriptionRow.id}`}
+        open={updateModalOpen}
+        onOpenChange={setUpdateModalOpen}
+        mode="update"
+        initialSubscriptionRow={subscriptionRow}
+        customers={customers}
+        initialCustomerId={null}
+        customerEditFields={null}
+        onCustomerEditFieldsChange={() => {}}
+        customerSaveToast={null}
+        onCustomerSaveToastDismiss={() => {}}
+        onRequestEditCustomer={() =>
+          showError(hubFeatureUnavailableMessage("Edit customer"))
+        }
+        onRequestAddCustomer={() =>
+          showError(hubFeatureUnavailableMessage("Add customer"))
+        }
+        lineTaxPatch={null}
+        onLineTaxPatchConsumed={() => {}}
+        savedPaymentCards={[]}
+        onSubscriptionUpdated={() => {}}
+      />
       <PauseNotificationModal
         open={pauseModalOpen}
         onOpenChange={setPauseModalOpen}
@@ -162,9 +208,7 @@ export function SubscriptionDetailBannerActions({
         <button
           type="button"
           className={actionBtnClass}
-          onClick={() => {
-            showError(hubFeatureUnavailableMessage("Update subscription"));
-          }}
+          onClick={() => setUpdateModalOpen(true)}
         >
           <RefreshCw className="size-4 shrink-0 text-[#344054]" strokeWidth={2} aria-hidden />
           Update subscription

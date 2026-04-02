@@ -50,6 +50,7 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
+  DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
@@ -75,14 +76,25 @@ import {
   brandBadgeLabel,
   type SubscriptionPaymentCard,
 } from "@/components/subscriptions/subscription-payment-card";
-import { buildSubscriptionRowFromCreateModal } from "@/components/subscriptions/subscription-row-from-create";
+import { persistSubscriptionUpdate } from "@/components/subscriptions/persist-subscription-update";
+import {
+  buildSubscriptionRowFromCreateModal,
+  mergeSubscriptionRowFromUpdateModal,
+} from "@/components/subscriptions/subscription-row-from-create";
 import type { SubscriptionRow } from "@/components/subscriptions/subscription-row-model";
+import {
+  customerDirectoryIdForSubscriptionRow,
+  subscriptionRowToEditableProductLines,
+} from "@/components/subscriptions/subscription-update-hydration";
+import { UpdateSubscriptionPreviewPanel } from "@/components/subscriptions/update-subscription-preview-panel";
 import {
   aggregateLineItemTaxesForSummary,
   getLineTaxBreakdown,
   sumTaxLineAmounts,
   type TaxMode,
 } from "@/components/subscriptions/tax-catalog";
+import { hubFeatureUnavailableMessage } from "@/lib/hub-feature-unavailable-message";
+import { formatDateMMDDYYYY, parseMMDDYYYY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 
 /** Match subscriptions table row actions — Figma ghost icon + menu items. */
@@ -97,6 +109,12 @@ function startOfDay(d: Date) {
 
 function startOfToday() {
   return startOfDay(new Date());
+}
+
+function addDays(d: Date, days: number): Date {
+  const x = new Date(d);
+  x.setDate(x.getDate() + days);
+  return x;
 }
 
 type CreateSubscriptionModalProps = {
@@ -125,7 +143,7 @@ type CreateSubscriptionModalProps = {
   /** Close create and open add payment card modal (parent-owned). */
   onRequestAddPaymentCard?: () => void;
   /** Close create and open tax modal — line row or subscription-wide (parent-owned). */
-  onRequestAddLineItemTax: (
+  onRequestAddLineItemTax?: (
     payload:
       | {
           kind: "line";
@@ -161,6 +179,10 @@ type CreateSubscriptionModalProps = {
   lastAddedPaymentCardId?: string | null;
   /** Persist to dashboard table + detail route (sessionStorage until API exists). */
   onSubscriptionCreated?: (row: SubscriptionRow) => void;
+  /** Update existing subscription — title, primary action, customer read-only, no new card required. */
+  mode?: "create" | "update";
+  initialSubscriptionRow?: SubscriptionRow | null;
+  onSubscriptionUpdated?: (row: SubscriptionRow) => void;
 };
 
 function customerSaveSuccessMessage(t: { name: string; mode: "add" | "edit" }) {
@@ -445,8 +467,36 @@ export function CreateSubscriptionModal({
   savedPaymentCards,
   lastAddedPaymentCardId = null,
   onSubscriptionCreated,
+  mode: modeProp,
+  initialSubscriptionRow = null,
+  onSubscriptionUpdated,
 }: CreateSubscriptionModalProps) {
+  const mode = modeProp ?? "create";
+  const [updatePreviewTab, setUpdatePreviewTab] = useState<
+    "summary" | "calculations"
+  >("calculations");
   const { showSuccess, showError } = useHubToast();
+  const requestLineTax = useCallback(
+    (
+      payload:
+        | {
+            kind: "line";
+            rowId: string;
+            productName: string;
+            intent?: "add" | "edit";
+            initialMode?: TaxMode;
+            initialSelectedTaxIds?: string[];
+          }
+        | { kind: "subscription"; intent?: "add" | "edit" }
+    ) => {
+      if (onRequestAddLineItemTax) {
+        onRequestAddLineItemTax(payload);
+      } else {
+        showError(hubFeatureUnavailableMessage("Line item tax"));
+      }
+    },
+    [onRequestAddLineItemTax, showError]
+  );
   const customerSelectId = useId();
   const frequencyStartDateId = useId();
   const frequencyEndDateId = useId();
@@ -496,6 +546,7 @@ export function CreateSubscriptionModal({
       appliedInitialCustomerIdRef.current = null;
       return;
     }
+    if (mode === "update") return;
     if (!initialCustomerId) return;
     if (appliedInitialCustomerIdRef.current === initialCustomerId) return;
     appliedInitialCustomerIdRef.current = initialCustomerId;
@@ -503,7 +554,7 @@ export function CreateSubscriptionModal({
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional one-way sync from parent
     setCustomer(initialCustomerId);
     onInitialCustomerIdConsumed?.();
-  }, [open, initialCustomerId, onInitialCustomerIdConsumed]);
+  }, [open, mode, initialCustomerId, onInitialCustomerIdConsumed]);
 
   /** Clear draft edits only when the user picks a different customer — not on mount (the old useEffect on `customer` wiped saves when returning from Edit customer). */
   const handleCustomerChange = useCallback(
@@ -518,7 +569,7 @@ export function CreateSubscriptionModal({
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
-      if (next) {
+      if (next && mode !== "update") {
         const today = startOfToday();
         setStartDate(today);
         setFrequencyStartDate(today);
@@ -537,7 +588,7 @@ export function CreateSubscriptionModal({
       }
       onOpenChange(next);
     },
-    [onOpenChange]
+    [onOpenChange, mode]
   );
 
   useEffect(() => {
@@ -594,6 +645,52 @@ export function CreateSubscriptionModal({
     null
   );
   const [productPickerSearch, setProductPickerSearch] = useState("");
+
+  useEffect(() => {
+    if (!open || mode !== "update" || !initialSubscriptionRow) return;
+    const row = initialSubscriptionRow;
+    const today = startOfToday();
+    const created = startOfDay(parseMMDDYYYY(row.createdOn));
+    setStartDate(created);
+    setFrequencyStartDate(created);
+    setFrequencyEndDate(today);
+    setTrialDays(12);
+    setBusinessTaxId("");
+    setSetFrequency(false);
+    setTaxId(false);
+    setSubscriptionDiscountAdded(false);
+    setAppliedCouponCode("SUMMER20");
+    setAppliedDiscountAmount(21);
+    setCouponBarOpen(false);
+    setCouponDropdownOpen(false);
+    setCouponDraft(null);
+    setPaymentMode(row.paymentMode);
+    const lines = subscriptionRowToEditableProductLines(row);
+    setProductRows(
+      lines.map((l) => ({
+        id: l.id,
+        name: l.name,
+        price: l.price,
+        qty: l.qty,
+        taxPercent: l.taxPercent,
+        taxMode: null,
+        taxSelectedIds: null,
+      }))
+    );
+    setSubscriptionTaxAdded(lines.some((l) => l.taxPercent != null));
+    setProductPickerRowId(null);
+    setProductPickerSearch("");
+    setCustomer(customerDirectoryIdForSubscriptionRow(row, customers));
+    onCustomerEditFieldsChange(null);
+    setUpdatePreviewTab("calculations");
+  }, [
+    open,
+    mode,
+    initialSubscriptionRow,
+    customers,
+    onCustomerEditFieldsChange,
+  ]);
+
   const productCatalogSearchId = useId();
   const [selectedPaymentCardId, setSelectedPaymentCardId] = useState<
     string | null
@@ -670,6 +767,21 @@ export function CreateSubscriptionModal({
     return taxableSubtotal + totalRolledUpTax;
   }, [taxableSubtotal, hasLineItemTax, totalRolledUpTax]);
 
+  /** Next charge date for the update preview (Figma Summary + due line). */
+  const summaryNextChargeDate = useMemo(() => {
+    if (mode !== "update") return startOfToday();
+    const base = setFrequency
+      ? frequencyEndDate
+      : addDays(startOfDay(startDate), 44);
+    return startOfDay(base);
+  }, [mode, setFrequency, frequencyEndDate, startDate]);
+
+  /** Next charge date label for the update preview (Figma: due {date}). */
+  const updateDueDateLabel = useMemo(
+    () => (mode !== "update" ? "" : formatDateMMDDYYYY(summaryNextChargeDate)),
+    [mode, summaryNextChargeDate]
+  );
+
   const hasLineItems = productRows.length > 0;
   /** First row must have a catalog / item name before adding another line (empty state still allows the first row). */
   const canPrependProductRow =
@@ -685,14 +797,17 @@ export function CreateSubscriptionModal({
 
   const baseCanCreate =
     hasLineItems &&
-    Boolean(selectedCustomer) &&
+    (mode === "update" && initialSubscriptionRow
+      ? true
+      : Boolean(selectedCustomer)) &&
     productRows.every((r) => r.name.trim().length > 0);
 
+  const needsPaymentCard = mode === "create" && hasLineItems;
   const canCreate =
     baseCanCreate &&
     (!setFrequency || !frequencyDateRangeInvalid) &&
     (!taxId || businessTaxId.trim().length > 0) &&
-    (!hasLineItems ||
+    (!needsPaymentCard ||
       (savedPaymentCards.length > 0 && selectedPaymentCardId != null));
 
   const openCouponMenu = useCallback(() => {
@@ -834,25 +949,65 @@ export function CreateSubscriptionModal({
           )
         : null}
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex max-h-[min(840px,calc(100vh-2rem))] w-full max-w-[min(768px,calc(100vw-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(768px,calc(100vw-2rem))]">
+      <DialogContent
+        className={cn(
+          "flex min-h-0 max-h-none flex-col gap-0 overflow-hidden p-0",
+          /* Fill viewport: 32px top/bottom; update modal max 1360px wide with 60px side gutters. */
+          "top-[32px] bottom-[32px] translate-y-0",
+          mode === "update"
+            ? "left-1/2 w-[min(1360px,calc(100vw-120px))] max-w-none -translate-x-1/2"
+            : "left-1/2 w-full max-w-[min(768px,calc(100vw-120px))] -translate-x-1/2 sm:max-w-[min(768px,calc(100vw-120px))]"
+        )}
+      >
         <div className="flex shrink-0 flex-col px-4 pt-4">
-          <div className="flex w-full items-start gap-2">
-            <div className="min-w-0 flex-1">
-              <DialogTitle className="text-base font-semibold leading-6 text-[#101828]">
-                Create new subscription
-              </DialogTitle>
+          {mode === "update" ? (
+            <div className="flex w-full items-start gap-2 pb-1">
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-base font-semibold leading-6 text-[#101828]">
+                  Update subscription
+                </DialogTitle>
+                <DialogDescription className="mt-1 text-sm font-normal leading-5 text-[#475467]">
+                  Add or remove products; totals and the next charge date update on
+                  the right. Changes apply on the next billing cycle.
+                </DialogDescription>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <DialogClose className="inline-flex size-5 shrink-0 items-center justify-center rounded text-[#667085] outline-none hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-[#004eeb]/30">
+                  <X className="size-5" strokeWidth={2} />
+                  <span className="sr-only">Close</span>
+                </DialogClose>
+              </div>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <DialogClose className="inline-flex size-5 shrink-0 items-center justify-center rounded text-[#667085] outline-none hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-[#004eeb]/30">
-                <X className="size-5" strokeWidth={2} />
-                <span className="sr-only">Close</span>
-              </DialogClose>
+          ) : (
+            <div className="flex w-full items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-base font-semibold leading-6 text-[#101828]">
+                  Create new subscription
+                </DialogTitle>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <DialogClose className="inline-flex size-5 shrink-0 items-center justify-center rounded text-[#667085] outline-none hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-[#004eeb]/30">
+                  <X className="size-5" strokeWidth={2} />
+                  <span className="sr-only">Close</span>
+                </DialogClose>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
+        <div
+          className={cn(
+            "flex min-h-0 flex-1 gap-6 overflow-hidden p-4",
+            mode === "update" && "flex-col lg:flex-row"
+          )}
+        >
         <TooltipProvider delayDuration={200}>
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-white p-4">
+        <div
+          className={cn(
+            "flex min-h-0 flex-1 flex-col overflow-y-auto bg-white p-0",
+            mode === "update" && "min-w-0 lg:max-w-none"
+          )}
+        >
           <div className="flex flex-col gap-6">
             {/* Customer information — Figma 1161:89490: Header Lite row + Avatar with Label + bordered action */}
             <div className="flex w-full min-w-0 flex-col justify-start gap-3 border-b border-[#d0d5dd] pb-6 sm:flex-row sm:items-center sm:justify-between">
@@ -862,19 +1017,73 @@ export function CreateSubscriptionModal({
               <div
                 className={cn(
                   "w-full min-w-0",
-                  !selectedCustomer
-                    ? "sm:w-[320px] sm:shrink-0"
-                    : "sm:w-auto sm:shrink-0"
+                  (mode === "update" && initialSubscriptionRow) || selectedCustomer
+                    ? "sm:w-auto sm:shrink-0"
+                    : "sm:w-[320px] sm:shrink-0"
                 )}
               >
                 {!selectedCustomer ? (
-                  <CustomerSelect
-                    id={customerSelectId}
-                    customers={customers}
-                    value={customer}
-                    onValueChange={handleCustomerChange}
-                    onAddCustomer={onRequestAddCustomer}
-                  />
+                  mode === "update" && initialSubscriptionRow ? (
+                    <div className="flex w-full min-w-0 items-center justify-end gap-4 sm:w-auto sm:gap-6">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <CustomerAvatar
+                          option={
+                            (() => {
+                              const cid = customerDirectoryIdForSubscriptionRow(
+                                initialSubscriptionRow,
+                                customers
+                              );
+                              const fromDir = cid
+                                ? findCustomerById(cid, customers)
+                                : undefined;
+                              return (
+                                fromDir ?? {
+                                  id: `locked-${initialSubscriptionRow.id}`,
+                                  name: initialSubscriptionRow.customer.name,
+                                  email: "",
+                                  phone: "",
+                                  address: "",
+                                  country: "United States",
+                                  state: "",
+                                  city: "",
+                                  zip: "",
+                                  avatarBg:
+                                    initialSubscriptionRow.customer.avatarBg ??
+                                    "#f2f4f7",
+                                }
+                              );
+                            })()
+                          }
+                          className="text-sm font-medium text-[#475467]"
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate text-base font-medium leading-6 text-[#101828]">
+                            {initialSubscriptionRow.customer.name}
+                          </p>
+                          <p className="truncate text-sm font-normal leading-5 text-[#475467]">
+                            {(() => {
+                              const cid = customerDirectoryIdForSubscriptionRow(
+                                initialSubscriptionRow,
+                                customers
+                              );
+                              const fromDir = cid
+                                ? findCustomerById(cid, customers)
+                                : undefined;
+                              return fromDir?.email || "—";
+                            })()}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <CustomerSelect
+                      id={customerSelectId}
+                      customers={customers}
+                      value={customer}
+                      onValueChange={handleCustomerChange}
+                      onAddCustomer={onRequestAddCustomer}
+                    />
+                  )
                 ) : (
                   <div className="flex w-full min-w-0 items-center justify-between gap-4 sm:w-auto sm:justify-end sm:gap-6">
                     <div className="flex min-w-0 items-center gap-2">
@@ -1361,7 +1570,7 @@ export function CreateSubscriptionModal({
                                       type="button"
                                       className="min-w-0 flex-1 truncate rounded text-left outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[#004eeb]/30"
                                       onClick={() =>
-                                        onRequestAddLineItemTax({
+                                        requestLineTax({
                                           kind: "line",
                                           rowId: row.id,
                                           productName:
@@ -1438,7 +1647,7 @@ export function CreateSubscriptionModal({
                                         : "cursor-not-allowed text-[#98a2b3]"
                                     )}
                                     onClick={() =>
-                                      onRequestAddLineItemTax({
+                                      requestLineTax({
                                         kind: "line",
                                         rowId: row.id,
                                         productName:
@@ -1501,7 +1710,7 @@ export function CreateSubscriptionModal({
                                         <DropdownMenuItem
                                           className={lineProductRowMenuItemClass}
                                           onSelect={() =>
-                                            onRequestAddLineItemTax({
+                                            requestLineTax({
                                               kind: "line",
                                               rowId: row.id,
                                               productName:
@@ -1741,7 +1950,7 @@ export function CreateSubscriptionModal({
                             className="text-base font-medium text-[#004eeb] transition-opacity hover:opacity-90"
                             onClick={() => {
                               if (subscriptionTaxAdded) {
-                                onRequestAddLineItemTax({
+                                requestLineTax({
                                   kind: "subscription",
                                   intent: "edit",
                                 });
@@ -1750,7 +1959,7 @@ export function CreateSubscriptionModal({
                                   (r) => r.taxPercent != null
                                 );
                                 if (!row) return;
-                                onRequestAddLineItemTax({
+                                requestLineTax({
                                   kind: "line",
                                   rowId: row.id,
                                   productName: row.name.trim() || "Product",
@@ -1792,7 +2001,7 @@ export function CreateSubscriptionModal({
                           type="button"
                           className="text-base font-medium leading-6 text-[#004eeb] transition-opacity hover:opacity-90"
                           onClick={() =>
-                            onRequestAddLineItemTax({
+                            requestLineTax({
                               kind: "subscription",
                               intent: "add",
                             })
@@ -2167,6 +2376,33 @@ export function CreateSubscriptionModal({
           </div>
         </div>
         </TooltipProvider>
+        {mode === "update" ? (
+          <UpdateSubscriptionPreviewPanel
+            activeTab={updatePreviewTab}
+            onTabChange={setUpdatePreviewTab}
+            amountDue={amountDue}
+            dueDateLabel={updateDueDateLabel}
+            summaryStartDate={startOfDay(startDate)}
+            summaryNextChargeDate={summaryNextChargeDate}
+            summaryFrequencyEnabled={setFrequency}
+            summaryFrequencyStartDate={startOfDay(frequencyStartDate)}
+            summaryFrequencyEndDate={startOfDay(frequencyEndDate)}
+            lines={productRows.map((r) => ({
+              name: r.name,
+              price: r.price,
+              qty: r.qty,
+              taxPercent: r.taxPercent,
+            }))}
+            lineSubtotal={lineSubtotal}
+            taxableSubtotal={taxableSubtotal}
+            discountAdded={subscriptionDiscountAdded}
+            couponCode={appliedCouponCode}
+            discountAmount={appliedDiscountAmount}
+            taxSummaryLines={taxSummaryLines}
+            hasLineItemTax={hasLineItemTax}
+          />
+        ) : null}
+        </div>
 
         <div className="shrink-0 border-t border-[#d0d5dd] pb-3 pt-3">
           <div className="flex justify-end gap-3 px-4">
@@ -2182,6 +2418,28 @@ export function CreateSubscriptionModal({
                 type="button"
                 disabled={!canCreate}
                 onClick={() => {
+                  if (mode === "update" && initialSubscriptionRow) {
+                    const row = mergeSubscriptionRowFromUpdateModal({
+                      existing: initialSubscriptionRow,
+                      customerName: initialSubscriptionRow.customer.name,
+                      customerAvatarBg:
+                        initialSubscriptionRow.customer.avatarBg,
+                      productNames: productRows.map((r) => r.name),
+                      productLines: productRows.map((r) => ({
+                        name: r.name,
+                        price: r.price,
+                        qty: naturalQty(r.qty),
+                        taxPercent: r.taxPercent,
+                      })),
+                      amount: amountDue,
+                      paymentMode,
+                    });
+                    persistSubscriptionUpdate(row);
+                    onSubscriptionUpdated?.(row);
+                    showSuccess("Subscription updated");
+                    onOpenChange(false);
+                    return;
+                  }
                   if (!displayCustomer) return;
                   const id =
                     typeof crypto !== "undefined" && crypto.randomUUID
@@ -2217,7 +2475,7 @@ export function CreateSubscriptionModal({
                     : "cursor-not-allowed border-[#b2ccff] bg-[#b2ccff] text-white opacity-100"
                 )}
               >
-                Create
+                {mode === "update" ? "Update" : "Create"}
               </button>
           </div>
         </div>

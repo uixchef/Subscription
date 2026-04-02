@@ -99,6 +99,7 @@ export function TransactionSummarySection({
         amount={row.amount}
         createdOn={row.createdOn}
         subscriptionId={row.id}
+        subscriptionRow={row}
       />
 
       <MetricsRow>
