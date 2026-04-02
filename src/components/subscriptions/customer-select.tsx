@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 
 export type CustomerOption = CustomerDemoProfile;
 
-/** Demo directory — identity + default address/phone per customer. */
+/** Demo directory — identity + default address/phone per customer (initial seed only). */
 export const CUSTOMERS = CUSTOMER_DEMO_PROFILES;
 
 export function initialsFromName(name: string) {
@@ -36,8 +36,11 @@ export function initialsFromName(name: string) {
     .toUpperCase();
 }
 
-export function findCustomerById(id: string): CustomerOption | undefined {
-  return CUSTOMERS.find((c) => c.id === id);
+export function findCustomerById(
+  id: string,
+  customers: readonly CustomerOption[]
+): CustomerOption | undefined {
+  return customers.find((c) => c.id === id);
 }
 
 export function CustomerAvatar({
@@ -63,6 +66,8 @@ export function CustomerAvatar({
 
 type CustomerSelectProps = {
   id?: string;
+  /** Live directory (includes customers added in-session). */
+  customers: readonly CustomerOption[];
   value: string;
   onValueChange: (id: string) => void;
   onAddCustomer?: () => void;
@@ -70,6 +75,7 @@ type CustomerSelectProps = {
 
 export function CustomerSelect({
   id,
+  customers,
   value,
   onValueChange,
   onAddCustomer,
@@ -77,19 +83,19 @@ export function CustomerSelect({
   const [searchQuery, setSearchQuery] = useState("");
 
   const selected = useMemo(
-    () => CUSTOMERS.find((c) => c.id === value),
-    [value]
+    () => customers.find((c) => c.id === value),
+    [customers, value]
   );
 
   const filteredCustomers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return CUSTOMERS;
-    return CUSTOMERS.filter(
+    if (!q) return [...customers];
+    return customers.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
         c.email.toLowerCase().includes(q)
     );
-  }, [searchQuery]);
+  }, [customers, searchQuery]);
 
   const label = selected?.name ?? "Select customer";
 

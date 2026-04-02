@@ -28,6 +28,7 @@ import {
   MODAL_OVERLAY_TOAST_TOP_PX,
   useHubToast,
 } from "@/components/payment-hub/hub-toast";
+import { subscriptionCreatedSuccessMessage } from "@/components/subscriptions/subscription-created-messages";
 import {
   CustomerAvatar,
   CustomerSelect,
@@ -68,11 +69,14 @@ import {
   figmaFieldInnerInput,
 } from "@/components/subscriptions/figma-field-focus";
 import { FigmaRadioIndicator } from "@/components/subscriptions/figma-radio-indicator";
+import type { CustomerDemoProfile } from "@/components/subscriptions/customer-demo-data";
 import type { CustomerFormValues } from "@/components/subscriptions/edit-customer-information-modal";
 import {
   brandBadgeLabel,
   type SubscriptionPaymentCard,
 } from "@/components/subscriptions/subscription-payment-card";
+import { buildSubscriptionRowFromCreateModal } from "@/components/subscriptions/subscription-row-from-create";
+import type { SubscriptionRow } from "@/components/subscriptions/subscription-row-model";
 import {
   aggregateLineItemTaxesForSummary,
   getLineTaxBreakdown,
@@ -98,13 +102,24 @@ function startOfToday() {
 type CreateSubscriptionModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Customer directory (seed + any added in-session). */
+  customers: CustomerDemoProfile[];
+  /**
+   * When reopening Create after Add customer save, select this directory id once.
+   * Parent clears after the modal reads it (onInitialCustomerIdConsumed).
+   */
+  initialCustomerId?: string | null;
+  onInitialCustomerIdConsumed?: () => void;
   customerEditFields: CustomerFormValues | null;
   onCustomerEditFieldsChange: (values: CustomerFormValues | null) => void;
   /** Success toast on Create overlay (52px) after Edit/Add customer save — parent-owned. */
   customerSaveToast: { name: string; mode: "add" | "edit" } | null;
   onCustomerSaveToastDismiss: () => void;
   /** Close create and open edit customer — parent owns the edit modal. */
-  onRequestEditCustomer: (initialValues: CustomerFormValues) => void;
+  onRequestEditCustomer: (
+    initialValues: CustomerFormValues,
+    customerId: string
+  ) => void;
   /** Close create and open add-customer form (empty fields). */
   onRequestAddCustomer: () => void;
   /** Close create and open add payment card modal (parent-owned). */
@@ -144,6 +159,8 @@ type CreateSubscriptionModalProps = {
   savedPaymentCards: SubscriptionPaymentCard[];
   /** Parent sets briefly after save — highlight row + scroll into view. */
   lastAddedPaymentCardId?: string | null;
+  /** Persist to dashboard table + detail route (sessionStorage until API exists). */
+  onSubscriptionCreated?: (row: SubscriptionRow) => void;
 };
 
 function customerSaveSuccessMessage(t: { name: string; mode: "add" | "edit" }) {
@@ -412,6 +429,9 @@ function SwitchToggle({
 export function CreateSubscriptionModal({
   open,
   onOpenChange,
+  customers,
+  initialCustomerId = null,
+  onInitialCustomerIdConsumed,
   customerEditFields,
   onCustomerEditFieldsChange,
   customerSaveToast,
@@ -424,6 +444,7 @@ export function CreateSubscriptionModal({
   onLineTaxPatchConsumed,
   savedPaymentCards,
   lastAddedPaymentCardId = null,
+  onSubscriptionCreated,
 }: CreateSubscriptionModalProps) {
   const { showSuccess, showError } = useHubToast();
   const customerSelectId = useId();
@@ -465,9 +486,24 @@ export function CreateSubscriptionModal({
   const [businessTaxId, setBusinessTaxId] = useState("");
 
   const selectedCustomer = useMemo(
-    () => (customer ? findCustomerById(customer) : undefined),
-    [customer]
+    () => (customer ? findCustomerById(customer, customers) : undefined),
+    [customer, customers]
   );
+
+  const appliedInitialCustomerIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open) {
+      appliedInitialCustomerIdRef.current = null;
+      return;
+    }
+    if (!initialCustomerId) return;
+    if (appliedInitialCustomerIdRef.current === initialCustomerId) return;
+    appliedInitialCustomerIdRef.current = initialCustomerId;
+    // Parent passes id once after add-customer save; local selection must match directory.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional one-way sync from parent
+    setCustomer(initialCustomerId);
+    onInitialCustomerIdConsumed?.();
+  }, [open, initialCustomerId, onInitialCustomerIdConsumed]);
 
   /** Clear draft edits only when the user picks a different customer — not on mount (the old useEffect on `customer` wiped saves when returning from Edit customer). */
   const handleCustomerChange = useCallback(
@@ -829,6 +865,7 @@ export function CreateSubscriptionModal({
                 {!selectedCustomer ? (
                   <CustomerSelect
                     id={customerSelectId}
+                    customers={customers}
                     value={customer}
                     onValueChange={handleCustomerChange}
                     onAddCustomer={onRequestAddCustomer}
@@ -867,7 +904,10 @@ export function CreateSubscriptionModal({
                           className="cursor-pointer gap-2 rounded px-4 py-2 text-base font-medium leading-6 text-[#101828] data-[highlighted]:bg-[#f2f4f7]"
                           onSelect={() => {
                             if (editCustomerInitialValues) {
-                              onRequestEditCustomer(editCustomerInitialValues);
+                              onRequestEditCustomer(
+                                editCustomerInitialValues,
+                                customer
+                              );
                             }
                           }}
                         >
@@ -2137,7 +2177,26 @@ export function CreateSubscriptionModal({
                 type="button"
                 disabled={!canCreate}
                 onClick={() => {
-                  showSuccess("Subscription created.");
+                  if (!displayCustomer) return;
+                  const id =
+                    typeof crypto !== "undefined" && crypto.randomUUID
+                      ? `sub-${crypto.randomUUID()}`
+                      : `sub-${Date.now()}`;
+                  const row = buildSubscriptionRowFromCreateModal({
+                    id,
+                    customerName: displayCustomer.name,
+                    customerAvatarBg: displayCustomer.avatarBg,
+                    productNames: productRows.map((r) => r.name),
+                    amount: amountDue,
+                    paymentMode,
+                  });
+                  onSubscriptionCreated?.(row);
+                  showSuccess(
+                    subscriptionCreatedSuccessMessage({
+                      customerName: displayCustomer.name,
+                      productNames: productRows.map((r) => r.name),
+                    })
+                  );
                   onOpenChange(false);
                 }}
                 className={cn(

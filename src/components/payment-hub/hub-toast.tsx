@@ -144,7 +144,8 @@ export function HubToastProvider({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Top of the main column (below Payments top bar), horizontally centered — overlays page content.
+ * Viewport-centered (same horizontal axis as Radix Create subscription / dialogs), below Payments chrome.
+ * Uses z-[260] so toasts paint above Radix dialogs (z-100–101) and the add-card modal (z-200).
  */
 export function HubToastViewport() {
   const ctx = useContext(HubToastContext);
@@ -155,7 +156,10 @@ export function HubToastViewport() {
   if (!toast) return null;
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-[100] flex justify-center px-4 pt-4">
+    <div
+      className="pointer-events-none fixed left-1/2 z-[260] w-max max-w-[min(478px,calc(100vw-2rem))] -translate-x-1/2 px-4 pt-4"
+      style={{ top: MODAL_OVERLAY_TOAST_TOP_PX }}
+    >
       <HubAlertToast
         variant={toast.variant}
         message={toast.message}

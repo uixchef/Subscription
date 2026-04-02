@@ -8,6 +8,35 @@ export type CustomerDemoProfile = {
   avatarBg?: string;
 } & Omit<CustomerFormValues, "name" | "email">;
 
+const NEW_CUSTOMER_AVATAR_PALETTE = [
+  "#f2f4f7",
+  "#dbeafe",
+  "#dbc0dd",
+  "#d1baa9",
+  "#dfcc9f",
+  "#c2c7b8",
+] as const;
+
+/** Build a directory row from the add/edit customer form (demo / client-side). */
+export function buildCustomerProfileFromForm(
+  values: CustomerFormValues,
+  id: string
+): CustomerDemoProfile {
+  const hash = id.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+  return {
+    id,
+    name: values.name.trim(),
+    email: values.email.trim(),
+    avatarBg: NEW_CUSTOMER_AVATAR_PALETTE[hash % NEW_CUSTOMER_AVATAR_PALETTE.length],
+    phone: values.phone,
+    address: values.address,
+    country: values.country,
+    state: values.state,
+    city: values.city,
+    zip: values.zip,
+  };
+}
+
 /**
  * Mock directory — each row has a distinct country, region, postal format, dial code, and number.
  * Country names match `iso-countries.json` / `normalizeCountryName`.

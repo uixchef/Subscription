@@ -21,6 +21,10 @@ import {
 } from "@/components/subscriptions/pause-subscription-messages";
 import { ResumeSubscriptionModal } from "@/components/subscriptions/resume-subscription-modal";
 import { figmaFieldFocusVisible } from "@/components/subscriptions/figma-field-focus";
+import {
+  loadCreatedSubscriptions,
+  subscribeCreatedSubscriptions,
+} from "@/components/subscriptions/created-subscriptions-storage";
 import { SUBSCRIPTION_TOTAL_ROWS } from "@/components/subscriptions/subscriptions-constants";
 import {
   buildSubscriptionRow,
@@ -466,12 +470,24 @@ export function SubscriptionsTable() {
   /** Locally canceled rows (badge → Canceled until refresh). */
   const [canceledIds, setCanceledIds] = useState<Record<string, boolean>>({});
   const [overridesHydrated, setOverridesHydrated] = useState(false);
+  const [createdRows, setCreatedRows] = useState<SubscriptionRow[]>([]);
 
   useEffect(() => {
     const o = loadSubscriptionUiOverrides();
     setPausedById(o.pausedById);
     setCanceledIds(o.canceledIds);
     setOverridesHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    setCreatedRows(loadCreatedSubscriptions());
+  }, []);
+
+  useEffect(() => {
+    return subscribeCreatedSubscriptions(() => {
+      setCreatedRows(loadCreatedSubscriptions());
+      setPage(1);
+    });
   }, []);
 
   useEffect(() => {
@@ -488,24 +504,27 @@ export function SubscriptionsTable() {
     });
   }, []);
 
+  const allRows = useMemo(() => {
+    const mock = Array.from({ length: SUBSCRIPTION_TOTAL_ROWS }, (_, i) =>
+      buildSubscriptionRow(i)
+    );
+    return [...createdRows, ...mock];
+  }, [createdRows]);
+
+  const totalRowCount = allRows.length;
+
   const { slice, start, end } = useMemo(() => {
     const startIdx = (page - 1) * perPage;
-    const rowCount = Math.max(
-      0,
-      Math.min(perPage, SUBSCRIPTION_TOTAL_ROWS - startIdx)
-    );
-    const slice = Array.from({ length: rowCount }, (_, i) => {
-      const globalIdx = startIdx + i;
-      return buildSubscriptionRow(globalIdx);
-    });
+    const rowCount = Math.max(0, Math.min(perPage, totalRowCount - startIdx));
+    const slice = allRows.slice(startIdx, startIdx + rowCount);
     return {
       slice,
       start: rowCount === 0 ? 0 : startIdx + 1,
       end: startIdx + rowCount,
     };
-  }, [page, perPage, SUBSCRIPTION_TOTAL_ROWS]);
+  }, [page, perPage, allRows, totalRowCount]);
 
-  const totalPages = Math.max(1, Math.ceil(SUBSCRIPTION_TOTAL_ROWS / perPage));
+  const totalPages = Math.max(1, Math.ceil(totalRowCount / perPage));
 
   const paginationItems = useMemo(
     () => getPaginationItems(page, totalPages),
@@ -771,7 +790,7 @@ export function SubscriptionsTable() {
               </select>
             </label>
             <p className="text-sm font-normal leading-5 text-[#475467]">
-              {start}-{end} of {SUBSCRIPTION_TOTAL_ROWS}
+              {start}-{end} of {totalRowCount}
             </p>
           </div>
           <nav

@@ -17,6 +17,16 @@ import {
   buildSubscriptionPaymentCard,
   type SubscriptionPaymentCard,
 } from "@/components/subscriptions/subscription-payment-card";
+import { appendCreatedSubscription } from "@/components/subscriptions/created-subscriptions-storage";
+import {
+  buildCustomerProfileFromForm,
+  CUSTOMER_DEMO_PROFILES,
+  type CustomerDemoProfile,
+} from "@/components/subscriptions/customer-demo-data";
+import {
+  loadCustomerDirectoryFromStorage,
+  saveCustomerDirectoryToStorage,
+} from "@/components/subscriptions/customer-directory-storage";
 import {
   EditCustomerInformationModal,
   EMPTY_CUSTOMER_FORM_VALUES,
@@ -37,6 +47,18 @@ export function SubscriptionsHeader() {
   const [customerFormVariant, setCustomerFormVariant] = useState<"edit" | "add">(
     "edit"
   );
+  /** Customer id when opening Edit from Create (updates directory on save). */
+  const [editingCustomerId, setEditingCustomerId] = useState<string | null>(
+    null
+  );
+  const [customers, setCustomers] = useState<CustomerDemoProfile[]>(() => [
+    ...CUSTOMER_DEMO_PROFILES,
+  ]);
+  /** After localStorage hydrate — avoids overwriting stored list before load. */
+  const [customerDirectoryReady, setCustomerDirectoryReady] = useState(false);
+  const [lastAddedCustomerId, setLastAddedCustomerId] = useState<string | null>(
+    null
+  );
   const [editCustomerInitial, setEditCustomerInitial] =
     useState<CustomerFormValues>(EMPTY_CUSTOMER_FORM_VALUES);
   /** Shown on Create subscription overlay at 52px after save/add from Edit customer (parent clears on dismiss). */
@@ -54,14 +76,6 @@ export function SubscriptionsHeader() {
   const [lastAddedPaymentCardId, setLastAddedPaymentCardId] = useState<
     string | null
   >(null);
-  const lastAddedClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (lastAddedClearRef.current) clearTimeout(lastAddedClearRef.current);
-    };
-  }, []);
-
   const [addLineItemTaxOpen, setAddLineItemTaxOpen] = useState(false);
   const [lineItemTaxKey, setLineItemTaxKey] = useState(0);
   const [lineItemTaxContext, setLineItemTaxContext] = useState<
@@ -97,7 +111,30 @@ export function SubscriptionsHeader() {
       }
     | null
   >(null);
+  const lastAddedClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (lastAddedClearRef.current) clearTimeout(lastAddedClearRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const stored = loadCustomerDirectoryFromStorage();
+    if (stored) setCustomers(stored);
+    setCustomerDirectoryReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!customerDirectoryReady) return;
+    saveCustomerDirectoryToStorage(customers);
+  }, [customers, customerDirectoryReady]);
+
   const onLineTaxPatchConsumed = useCallback(() => setLineTaxPatch(null), []);
+  const onInitialCustomerIdConsumed = useCallback(
+    () => setLastAddedCustomerId(null),
+    []
+  );
 
   return (
     <div className="flex h-fit w-full min-w-0 shrink-0 items-center border-b border-[#d0d5dd] bg-white px-4 pb-2 pt-2">
@@ -150,11 +187,15 @@ export function SubscriptionsHeader() {
           setCreateOpen(next);
           if (!next) setCustomerSaveToast(null);
         }}
+        customers={customers}
+        initialCustomerId={lastAddedCustomerId}
+        onInitialCustomerIdConsumed={onInitialCustomerIdConsumed}
         customerEditFields={customerEditFields}
         onCustomerEditFieldsChange={setCustomerEditFields}
         customerSaveToast={customerSaveToast}
         onCustomerSaveToastDismiss={() => setCustomerSaveToast(null)}
-        onRequestEditCustomer={(initialValues) => {
+        onRequestEditCustomer={(initialValues, customerId) => {
+          setEditingCustomerId(customerId);
           setCustomerFormVariant("edit");
           setEditCustomerInitial(initialValues);
           setCustomerFormKey((k) => k + 1);
@@ -162,6 +203,7 @@ export function SubscriptionsHeader() {
           setEditCustomerOpen(true);
         }}
         onRequestAddCustomer={() => {
+          setEditingCustomerId(null);
           setCustomerFormVariant("add");
           setEditCustomerInitial(EMPTY_CUSTOMER_FORM_VALUES);
           setCustomerFormKey((k) => k + 1);
@@ -194,6 +236,7 @@ export function SubscriptionsHeader() {
         onLineTaxPatchConsumed={onLineTaxPatchConsumed}
         savedPaymentCards={savedPaymentCards}
         lastAddedPaymentCardId={lastAddedPaymentCardId}
+        onSubscriptionCreated={appendCreatedSubscription}
       />
       <AddPaymentCardModal
         key={`add-payment-card-${addPaymentCardKey}`}
@@ -232,18 +275,44 @@ export function SubscriptionsHeader() {
           if (!next) {
             setEditCustomerOpen(false);
             setEditCustomerInitial(EMPTY_CUSTOMER_FORM_VALUES);
+            setEditingCustomerId(null);
             setCreateOpen(true);
           }
         }}
         initialValues={editCustomerInitial}
-        onSave={(values) => {
-          setCustomerEditFields(values);
+        customerRecordId={editingCustomerId}
+        onSave={(values, meta) => {
           setCustomerSaveToast({
             name: values.name.trim() || "Customer",
             mode: customerFormVariant,
           });
+          if (customerFormVariant === "add") {
+            const id =
+              typeof crypto !== "undefined" && crypto.randomUUID
+                ? crypto.randomUUID()
+                : `cust-${Date.now()}`;
+            setCustomers((prev) => [
+              ...prev,
+              buildCustomerProfileFromForm(values, id),
+            ]);
+            setLastAddedCustomerId(id);
+          } else {
+            const targetId = meta?.customerId ?? editingCustomerId;
+            if (targetId) {
+              setCustomers((prev) =>
+                prev.map((c) =>
+                  c.id === targetId
+                    ? buildCustomerProfileFromForm(values, targetId)
+                    : c
+                )
+              );
+            }
+          }
+          /** Directory + localStorage are source of truth; no stale overlay on create. */
+          setCustomerEditFields(null);
           setEditCustomerOpen(false);
           setEditCustomerInitial(EMPTY_CUSTOMER_FORM_VALUES);
+          setEditingCustomerId(null);
           setCreateOpen(true);
         }}
       />

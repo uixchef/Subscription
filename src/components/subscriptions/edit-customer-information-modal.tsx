@@ -99,7 +99,12 @@ type EditCustomerInformationModalProps = {
   /** `add` — title “Add customer”, empty-field placeholders; `edit` — existing copy. */
   variant?: "edit" | "add";
   initialValues: CustomerFormValues;
-  onSave: (values: CustomerFormValues) => void;
+  /** Edit variant: directory id to update (returned in `onSave` meta). */
+  customerRecordId?: string | null;
+  onSave: (
+    values: CustomerFormValues,
+    meta?: { customerId?: string }
+  ) => void;
 };
 
 export function EditCustomerInformationModal({
@@ -107,6 +112,7 @@ export function EditCustomerInformationModal({
   onOpenChange,
   variant = "edit",
   initialValues,
+  customerRecordId = null,
   onSave,
 }: EditCustomerInformationModalProps) {
   const isAdd = variant === "add";
@@ -501,12 +507,17 @@ export function EditCustomerInformationModal({
                 return;
               }
               setZipFieldError(null);
-              onSave({
-                ...form,
-                country: workingCountry,
-                state: workingState,
-                zip: workingZip,
-              });
+              onSave(
+                {
+                  ...form,
+                  country: workingCountry,
+                  state: workingState,
+                  zip: workingZip,
+                },
+                !isAdd && customerRecordId && customerRecordId.trim()
+                  ? { customerId: customerRecordId }
+                  : undefined
+              );
             } finally {
               setPostalCheckPending(false);
             }

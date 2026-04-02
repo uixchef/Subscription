@@ -1,26 +1,38 @@
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+"use client";
+
+import { notFound, useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { SubscriptionDetailHeader } from "@/components/subscriptions/subscription-detail-header";
 import { SubscriptionDetailViewWithOverrides } from "@/components/subscriptions/subscription-detail-view-with-overrides";
-import { getSubscriptionRowById } from "@/components/subscriptions/subscription-row-model";
+import { subscribeCreatedSubscriptions } from "@/components/subscriptions/created-subscriptions-storage";
+import { resolveSubscriptionRow } from "@/components/subscriptions/resolve-subscription-row";
+import type { SubscriptionRow } from "@/components/subscriptions/subscription-row-model";
 
-type Props = { params: Promise<{ subscriptionId: string }> };
+export default function SubscriptionDetailPage() {
+  const params = useParams();
+  const subscriptionId = String(params?.subscriptionId ?? "");
+  const [row, setRow] = useState<SubscriptionRow | null>(null);
+  const [ready, setReady] = useState(false);
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { subscriptionId } = await params;
-  const row = getSubscriptionRowById(subscriptionId);
-  const title = row
-    ? `${row.customer.name} · Subscription`
-    : `Subscription ${subscriptionId}`;
-  return {
-    title: `${title} | Payments`,
-  };
-}
+  useEffect(() => {
+    const sync = () => setRow(resolveSubscriptionRow(subscriptionId));
+    sync();
+    setReady(true);
+    return subscribeCreatedSubscriptions(sync);
+  }, [subscriptionId]);
 
-export default async function SubscriptionDetailPage({ params }: Props) {
-  const { subscriptionId } = await params;
-  const row = getSubscriptionRowById(subscriptionId);
+  if (!ready) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <SubscriptionDetailHeader paymentMode="live" />
+        <div className="flex min-h-[240px] flex-1 items-center justify-center p-4 text-sm text-[#475467]">
+          Loading…
+        </div>
+      </div>
+    );
+  }
+
   if (!row) {
     notFound();
   }
