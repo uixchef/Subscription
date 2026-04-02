@@ -17,8 +17,10 @@ export default function SubscriptionDetailPage() {
 
   useEffect(() => {
     const sync = () => setRow(resolveSubscriptionRow(subscriptionId));
-    sync();
-    setReady(true);
+    queueMicrotask(() => {
+      sync();
+      setReady(true);
+    });
     return subscribeCreatedSubscriptions(sync);
   }, [subscriptionId]);
 

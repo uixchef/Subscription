@@ -1,4 +1,7 @@
-import type { SubscriptionRow } from "@/components/subscriptions/subscription-row-model";
+import type {
+  CreatedProductLineSnapshot,
+  SubscriptionRow,
+} from "@/components/subscriptions/subscription-row-model";
 import { formatDateMMDDYYYY, parseMMDDYYYY } from "@/lib/date-format";
 
 export type ProductLineItem = {
@@ -82,8 +85,42 @@ const TXN_STATUS_ROTATION: SubscriptionRow["status"][] = [
   "Active",
 ];
 
+function naturalQty(n: number): number {
+  const f = Math.floor(Number(n));
+  return Number.isFinite(f) && f >= 1 ? f : 1;
+}
+
+function buildProductLineItemsFromCreated(
+  row: SubscriptionRow,
+  lines: CreatedProductLineSnapshot[]
+): ProductLineItem[] {
+  const seed = seedFromRowId(row.id);
+  const freqCycle: ProductLineItem["freq"][] = ["weekly", "monthly", "once"];
+  return lines.map((line, i) => {
+    const qty = naturalQty(line.qty);
+    const unitCents = Math.round(line.price * 100);
+    const lineSubtotalCents = Math.round(line.price * qty * 100);
+    const taxCents =
+      line.taxPercent != null
+        ? Math.round((lineSubtotalCents * line.taxPercent) / 100)
+        : 0;
+    return {
+      item: truncate(line.name, 44) || "Subscription plan",
+      price: formatUsdFromCents(unitCents),
+      qty: String(qty),
+      freq: freqCycle[(seed + i) % 3],
+      tax: formatUsdFromCents(taxCents),
+      sub: formatUsdFromCents(lineSubtotalCents),
+    };
+  });
+}
+
 /** Line items priced from `row.amount` so subtotals reconcile with the subscription. */
 export function buildProductLineItems(row: SubscriptionRow): ProductLineItem[] {
+  if (row.createdProductLines && row.createdProductLines.length > 0) {
+    return buildProductLineItemsFromCreated(row, row.createdProductLines);
+  }
+
   const cents = parseUsdToCents(row.amount);
   const seed = seedFromRowId(row.id);
   const p1 = Math.floor(cents * 0.56);

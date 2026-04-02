@@ -602,22 +602,24 @@ export function CreateSubscriptionModal({
 
   useEffect(() => {
     const n = savedPaymentCards.length;
-    if (n === 0) {
-      setSelectedPaymentCardId(null);
-      savedCardsLenRef.current = 0;
-      return;
-    }
-    if (n > savedCardsLenRef.current) {
-      setSelectedPaymentCardId(savedPaymentCards[n - 1]!.id);
+    queueMicrotask(() => {
+      if (n === 0) {
+        setSelectedPaymentCardId(null);
+        savedCardsLenRef.current = 0;
+        return;
+      }
+      if (n > savedCardsLenRef.current) {
+        setSelectedPaymentCardId(savedPaymentCards[n - 1]!.id);
+        savedCardsLenRef.current = n;
+        return;
+      }
       savedCardsLenRef.current = n;
-      return;
-    }
-    savedCardsLenRef.current = n;
-    setSelectedPaymentCardId((prev) =>
-      prev != null && savedPaymentCards.some((c) => c.id === prev)
-        ? prev
-        : savedPaymentCards[0]!.id
-    );
+      setSelectedPaymentCardId((prev) =>
+        prev != null && savedPaymentCards.some((c) => c.id === prev)
+          ? prev
+          : savedPaymentCards[0]!.id
+      );
+    });
   }, [savedPaymentCards]);
 
   useEffect(() => {
@@ -752,31 +754,34 @@ export function CreateSubscriptionModal({
 
   useEffect(() => {
     if (!lineTaxPatch) return;
-    if (lineTaxPatch.kind === "subscription") {
-      setProductRows((rows) =>
-        rows.map((r) => ({
-          ...r,
-          taxPercent: lineTaxPatch.taxPercent,
-          taxMode: lineTaxPatch.mode,
-          taxSelectedIds: lineTaxPatch.selectedTaxIds,
-        }))
-      );
-      setSubscriptionTaxAdded(true);
-    } else {
-      setProductRows((rows) =>
-        rows.map((r) =>
-          r.id === lineTaxPatch.rowId
-            ? {
-                ...r,
-                taxPercent: lineTaxPatch.taxPercent,
-                taxMode: lineTaxPatch.mode,
-                taxSelectedIds: lineTaxPatch.selectedTaxIds,
-              }
-            : r
-        )
-      );
-    }
-    onLineTaxPatchConsumed();
+    const patch = lineTaxPatch;
+    queueMicrotask(() => {
+      if (patch.kind === "subscription") {
+        setProductRows((rows) =>
+          rows.map((r) => ({
+            ...r,
+            taxPercent: patch.taxPercent,
+            taxMode: patch.mode,
+            taxSelectedIds: patch.selectedTaxIds,
+          }))
+        );
+        setSubscriptionTaxAdded(true);
+      } else {
+        setProductRows((rows) =>
+          rows.map((r) =>
+            r.id === patch.rowId
+              ? {
+                  ...r,
+                  taxPercent: patch.taxPercent,
+                  taxMode: patch.mode,
+                  taxSelectedIds: patch.selectedTaxIds,
+                }
+              : r
+          )
+        );
+      }
+      onLineTaxPatchConsumed();
+    });
   }, [lineTaxPatch, onLineTaxPatchConsumed]);
 
   const removeProductRow = (id: string) => {
@@ -1548,7 +1553,7 @@ export function CreateSubscriptionModal({
               </div>
 
               {hasLineItems ? (
-                <div className="flex flex-col gap-2 overflow-hidden pr-0 sm:pr-12">
+                <div className="flex flex-col gap-2 overflow-hidden pr-6">
                   <CalcSummaryRow
                     label="Subtotal"
                     amount={lineSubtotal.toFixed(2)}
@@ -1811,7 +1816,7 @@ export function CreateSubscriptionModal({
                   />
                 </div>
               ) : (
-                <div className="mt-2 flex flex-col gap-2 pr-0 sm:pr-12">
+                <div className="mt-2 flex flex-col gap-2 pr-3">
                   <CalcSummaryRow label="Subtotal" amount="0.00" />
                   <div className="flex min-h-6 w-full items-center">
                     <div className="min-w-0 flex-1 px-3">
@@ -2187,6 +2192,12 @@ export function CreateSubscriptionModal({
                     customerName: displayCustomer.name,
                     customerAvatarBg: displayCustomer.avatarBg,
                     productNames: productRows.map((r) => r.name),
+                    productLines: productRows.map((r) => ({
+                      name: r.name,
+                      price: r.price,
+                      qty: naturalQty(r.qty),
+                      taxPercent: r.taxPercent,
+                    })),
                     amount: amountDue,
                     paymentMode,
                   });

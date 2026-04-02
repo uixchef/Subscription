@@ -11,6 +11,15 @@ export type SubscriptionStatus =
 
 export type SubscriptionPaymentMode = "live" | "test";
 
+/** Snapshot from Create subscription — drives detail Product(s) table for user-created rows. */
+export type CreatedProductLineSnapshot = {
+  name: string;
+  /** Unit price in dollars (matches form). */
+  price: number;
+  qty: number;
+  taxPercent: number | null;
+};
+
 export type SubscriptionRow = {
   id: string;
   provider: string;
@@ -21,6 +30,8 @@ export type SubscriptionRow = {
   status: SubscriptionStatus;
   /** Live vs test processing — set in `buildSubscriptionRow` for demo variety. */
   paymentMode: SubscriptionPaymentMode;
+  /** When set (hub create flow), product table shows these lines instead of generated demo rows. */
+  createdProductLines?: CreatedProductLineSnapshot[];
 };
 
 type SubscriptionRowSeed = Pick<

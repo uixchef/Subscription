@@ -152,16 +152,21 @@ export function AddLineItemTaxModal({
   useEffect(() => {
     if (!open) return;
     const nextMode = initialMode ?? "manual";
-    setMode(nextMode);
-    setTaxPage(1);
-    setTaxPerPage(10);
-    if (nextMode === "automatic") {
-      setSelectedIds(new Set());
-    } else if (initialSelectedTaxIds && initialSelectedTaxIds.length > 0) {
-      setSelectedIds(new Set(initialSelectedTaxIds));
-    } else {
-      setSelectedIds(new Set(["tax-1"]));
-    }
+    const ids = initialSelectedTaxIds;
+    queueMicrotask(() => {
+      setMode(nextMode);
+      setTaxPage(1);
+      setTaxPerPage(10);
+      if (nextMode === "automatic") {
+        setSelectedIds(new Set());
+      } else if (ids && ids.length > 0) {
+        setSelectedIds(new Set(ids));
+      } else {
+        setSelectedIds(new Set(["tax-1"]));
+      }
+    });
+    // Selection reset is keyed by `initialSelectionKey` (sorted ids) to avoid unstable array identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initialSelectedTaxIds reflected in initialSelectionKey
   }, [open, initialMode, initialSelectionKey]);
 
   const displayName = productName.trim() || "Product";

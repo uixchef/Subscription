@@ -106,7 +106,6 @@ function profileEmailForRow(row: SubscriptionRow): string {
 }
 
 function profilePhoneForRow(row: SubscriptionRow): string {
-  const idx = parseSubscriptionRowIndexFromId(row.id) ?? 0;
   const h = pseudoHex(row.id + "tel", 8);
   const mid = 200 + (parseInt(h.slice(0, 2), 16) % 56);
   const last4 = String(1000 + (parseInt(h.slice(2, 6), 16) % 9000)).padStart(4, "0");
@@ -662,8 +661,8 @@ export function SubscriptionDetailView({
               },
             ]}
           >
-            {productRows.map((p) => (
-              <tr key={p.item}>
+            {productRows.map((p, i) => (
+              <tr key={`${row.id}-product-${i}`}>
                 <DataTableCell>
                   <span className="block truncate">{p.item}</span>
                 </DataTableCell>

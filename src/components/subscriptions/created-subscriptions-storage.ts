@@ -1,4 +1,7 @@
-import type { SubscriptionRow } from "@/components/subscriptions/subscription-row-model";
+import type {
+  CreatedProductLineSnapshot,
+  SubscriptionRow,
+} from "@/components/subscriptions/subscription-row-model";
 
 const STORAGE_KEY = "subscriptions-created-by-user-v1";
 
@@ -17,13 +20,27 @@ export function loadCreatedSubscriptions(): SubscriptionRow[] {
   }
 }
 
+function isCreatedProductLineLike(x: unknown): x is CreatedProductLineSnapshot {
+  if (!x || typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  return (
+    typeof o.name === "string" &&
+    typeof o.price === "number" &&
+    Number.isFinite(o.price) &&
+    typeof o.qty === "number" &&
+    Number.isFinite(o.qty) &&
+    (o.taxPercent === null ||
+      (typeof o.taxPercent === "number" && Number.isFinite(o.taxPercent)))
+  );
+}
+
 function isSubscriptionRowLike(x: unknown): x is SubscriptionRow {
   if (!x || typeof x !== "object") return false;
   const r = x as Record<string, unknown>;
   const cust = r.customer;
   if (!cust || typeof cust !== "object") return false;
   const customer = cust as Record<string, unknown>;
-  return (
+  const base =
     typeof r.id === "string" &&
     typeof r.provider === "string" &&
     typeof customer.name === "string" &&
@@ -31,8 +48,12 @@ function isSubscriptionRowLike(x: unknown): x is SubscriptionRow {
     typeof r.createdOn === "string" &&
     typeof r.amount === "string" &&
     typeof r.status === "string" &&
-    (r.paymentMode === "live" || r.paymentMode === "test")
-  );
+    (r.paymentMode === "live" || r.paymentMode === "test");
+
+  if (!base) return false;
+  if (r.createdProductLines === undefined) return true;
+  if (!Array.isArray(r.createdProductLines)) return false;
+  return r.createdProductLines.every(isCreatedProductLineLike);
 }
 
 export function saveCreatedSubscriptions(rows: SubscriptionRow[]): void {

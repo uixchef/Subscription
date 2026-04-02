@@ -24,7 +24,8 @@ export function pauseSubscriptionSuccessMessage(
  * {@link PAUSE_SUBSCRIPTION_ERROR_MESSAGE}.
  */
 export async function pauseSubscriptionRequest(
-  _payload: PauseConfirmPayload
+  payload: PauseConfirmPayload
 ): Promise<void> {
+  void payload;
   await Promise.resolve();
 }

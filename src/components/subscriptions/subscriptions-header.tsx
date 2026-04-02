@@ -121,8 +121,10 @@ export function SubscriptionsHeader() {
 
   useEffect(() => {
     const stored = loadCustomerDirectoryFromStorage();
-    if (stored) setCustomers(stored);
-    setCustomerDirectoryReady(true);
+    queueMicrotask(() => {
+      if (stored) setCustomers(stored);
+      setCustomerDirectoryReady(true);
+    });
   }, []);
 
   useEffect(() => {

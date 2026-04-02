@@ -474,13 +474,15 @@ export function SubscriptionsTable() {
 
   useEffect(() => {
     const o = loadSubscriptionUiOverrides();
-    setPausedById(o.pausedById);
-    setCanceledIds(o.canceledIds);
-    setOverridesHydrated(true);
+    queueMicrotask(() => {
+      setPausedById(o.pausedById);
+      setCanceledIds(o.canceledIds);
+      setOverridesHydrated(true);
+    });
   }, []);
 
   useEffect(() => {
-    setCreatedRows(loadCreatedSubscriptions());
+    queueMicrotask(() => setCreatedRows(loadCreatedSubscriptions()));
   }, []);
 
   useEffect(() => {
@@ -740,8 +742,9 @@ export function SubscriptionsTable() {
                             }}
                             onResume={(subscriptionId) => {
                               setPausedById((p) => {
-                                const { [subscriptionId]: _, ...rest } = p;
-                                return rest;
+                                const next = { ...p };
+                                delete next[subscriptionId];
+                                return next;
                               });
                             }}
                             onCancelConfirmed={(subscriptionId) => {
@@ -750,8 +753,9 @@ export function SubscriptionsTable() {
                                 [subscriptionId]: true,
                               }));
                               setPausedById((p) => {
-                                const { [subscriptionId]: _, ...rest } = p;
-                                return rest;
+                                const next = { ...p };
+                                delete next[subscriptionId];
+                                return next;
                               });
                             }}
                           />

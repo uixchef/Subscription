@@ -162,7 +162,6 @@ export function FigmaDatePickerField({
         aria-label={ariaLabel}
         aria-expanded={open}
         aria-haspopup="dialog"
-        aria-invalid={invalid ? true : undefined}
         onClick={handleTriggerClick}
         className={cn(
           "flex h-9 w-full min-h-9 items-center gap-1 rounded border border-[#d0d5dd] bg-white px-2 text-left text-base leading-6 text-[#101828] shadow-[0px_1px_2px_0px_rgba(16,24,40,0.05)]",

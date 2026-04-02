@@ -58,7 +58,7 @@ export function AddPaymentCardModal({
 
   useEffect(() => {
     if (!open) return;
-    setForm(EMPTY_PAYMENT_CARD_FORM);
+    queueMicrotask(() => setForm(EMPTY_PAYMENT_CARD_FORM));
   }, [open]);
 
   const update = <K extends keyof PaymentCardFormValues>(
