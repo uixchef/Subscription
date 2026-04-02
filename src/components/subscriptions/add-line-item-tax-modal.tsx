@@ -14,28 +14,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import {
+  ALL_TAX_TABLE_ROWS,
+  AUTOMATIC_TAX_RATE,
+  type TaxMode,
+} from "@/components/subscriptions/tax-catalog";
 
-const TAX_NAME_ICONS = [
-  "Sales tax",
-  "Income tax",
-  "VAT",
-  "GST",
-  "Use tax",
-  "Excise tax",
-] as const;
-
-/** Catalog-sized list so manual tax uses the same pagination pattern as the dashboard. */
-const ALL_TAX_TABLE_ROWS = Array.from({ length: 24 }, (_, i) => ({
-  id: `tax-${i + 1}`,
-  name:
-    i < TAX_NAME_ICONS.length
-      ? TAX_NAME_ICONS[i]
-      : `Tax type ${i + 1}`,
-  rate: 5 + (i % 15),
-  taxId: `TID${5343 + i}`,
-}));
-
-export type TaxMode = "automatic" | "manual";
+export type { TaxMode };
 
 /**
  * Figma 1164:119519 — table checkbox (16px, radius 2px, Gray/300 border, Primary fill + check;
@@ -158,8 +143,11 @@ export function AddLineItemTaxModal({
     () => new Set(["tax-1"])
   );
 
+  /** Sorted so order of ids doesn’t skip effect; stable for multi-select restore. */
   const initialSelectionKey =
-    initialSelectedTaxIds?.join(",") ?? "";
+    initialSelectedTaxIds && initialSelectedTaxIds.length > 0
+      ? [...initialSelectedTaxIds].sort().join(",")
+      : "";
 
   useEffect(() => {
     if (!open) return;
@@ -259,7 +247,9 @@ export function AddLineItemTaxModal({
   const handleSave = () => {
     if (!canSave) return;
     const taxPercent =
-      mode === "automatic" ? 10 : Math.round(manualPercent * 10) / 10;
+      mode === "automatic"
+        ? AUTOMATIC_TAX_RATE
+        : Math.round(manualPercent * 10) / 10;
     onSave({
       taxPercent,
       mode,

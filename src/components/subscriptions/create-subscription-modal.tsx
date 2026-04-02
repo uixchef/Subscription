@@ -52,6 +52,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
+import {
+  invoiceDarkTooltipClassName,
+  Tooltip,
+  TooltipArrow,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { FigmaDatePickerField } from "@/components/subscriptions/figma-date-picker";
 import {
   figmaFieldFocusTransition,
@@ -61,7 +69,17 @@ import {
 } from "@/components/subscriptions/figma-field-focus";
 import { FigmaRadioIndicator } from "@/components/subscriptions/figma-radio-indicator";
 import type { CustomerFormValues } from "@/components/subscriptions/edit-customer-information-modal";
+import {
+  aggregateLineItemTaxesForSummary,
+  getLineTaxBreakdown,
+  sumTaxLineAmounts,
+  type TaxMode,
+} from "@/components/subscriptions/tax-catalog";
 import { cn } from "@/lib/utils";
+
+/** Match subscriptions table row actions — Figma ghost icon + menu items. */
+const lineProductRowMenuItemClass =
+  "cursor-pointer gap-2 rounded px-4 py-2 text-base font-medium leading-6 text-[#101828] data-[highlighted]:bg-[#f2f4f7] data-[highlighted]:text-[#101828]";
 
 type PaymentMode = "live" | "test";
 
@@ -90,13 +108,27 @@ type CreateSubscriptionModalProps = {
           rowId: string;
           productName: string;
           intent?: "add" | "edit";
+          /** Restore multi-select tax rows when opening Edit (manual mode). */
+          initialMode?: TaxMode;
+          initialSelectedTaxIds?: string[];
         }
       | { kind: "subscription"; intent?: "add" | "edit" }
   ) => void;
   /** Parent applies saved tax after tax modal closes (one line or all lines). */
   lineTaxPatch:
-    | { kind: "line"; rowId: string; taxPercent: number }
-    | { kind: "subscription"; taxPercent: number }
+    | {
+        kind: "line";
+        rowId: string;
+        taxPercent: number;
+        mode: TaxMode;
+        selectedTaxIds: string[];
+      }
+    | {
+        kind: "subscription";
+        taxPercent: number;
+        mode: TaxMode;
+        selectedTaxIds: string[];
+      }
     | null;
   onLineTaxPatchConsumed: () => void;
 };
@@ -116,6 +148,9 @@ type ProductLineItem = {
   qty: number;
   /** When set, show percent + info; otherwise show “Add tax”. */
   taxPercent: number | null;
+  /** Mirrors last save from Add tax modal (line scope). */
+  taxMode?: TaxMode | null;
+  taxSelectedIds?: string[] | null;
 };
 
 /**
@@ -154,9 +189,6 @@ const COUPON_OPTIONS = [
   { code: "WELCOME10", amount: 10 },
   { code: "FIRST15", amount: 15 },
 ] as const;
-
-const CENTRAL_TAX = 3.5;
-const CITY_TAX = 2.8;
 
 /** Figma 1164:166076 — amount column fixed 102px, px-3. */
 function CalcCurrencySemibold({ amount }: { amount: string }) {
@@ -449,10 +481,23 @@ export function CreateSubscriptionModal({
     if (!subscriptionDiscountAdded) return lineSubtotal;
     return lineSubtotal - appliedDiscountAmount;
   }, [lineSubtotal, subscriptionDiscountAdded, appliedDiscountAmount]);
+
+  const hasLineItemTax = useMemo(
+    () => productRows.some((r) => r.taxPercent != null),
+    [productRows]
+  );
+  const taxSummaryLines = useMemo(
+    () => aggregateLineItemTaxesForSummary(productRows),
+    [productRows]
+  );
+  const totalRolledUpTax = useMemo(
+    () => sumTaxLineAmounts(taxSummaryLines),
+    [taxSummaryLines]
+  );
   const amountDue = useMemo(() => {
-    if (!subscriptionTaxAdded) return taxableSubtotal;
-    return taxableSubtotal + CENTRAL_TAX + CITY_TAX;
-  }, [taxableSubtotal, subscriptionTaxAdded]);
+    if (!hasLineItemTax) return taxableSubtotal;
+    return taxableSubtotal + totalRolledUpTax;
+  }, [taxableSubtotal, hasLineItemTax, totalRolledUpTax]);
 
   const hasLineItems = productRows.length > 0;
   /** First row must have a catalog / item name before adding another line (empty state still allows the first row). */
@@ -465,7 +510,9 @@ export function CreateSubscriptionModal({
 
   const openCouponMenu = useCallback(() => {
     setCouponBarOpen(true);
-    setCouponDropdownOpen(true);
+    // Open the select after this pointer gesture completes so Radix doesn’t treat
+    // the opening click as an outside dismiss (Dialog + portaled dropdown).
+    window.setTimeout(() => setCouponDropdownOpen(true), 0);
   }, []);
 
   const confirmCouponSelection = useCallback(() => {
@@ -503,7 +550,12 @@ export function CreateSubscriptionModal({
   const clearSubscriptionTax = useCallback(() => {
     setSubscriptionTaxAdded(false);
     setProductRows((rows) =>
-      rows.map((r) => ({ ...r, taxPercent: null }))
+      rows.map((r) => ({
+        ...r,
+        taxPercent: null,
+        taxMode: null,
+        taxSelectedIds: null,
+      }))
     );
   }, []);
 
@@ -517,14 +569,24 @@ export function CreateSubscriptionModal({
     if (!lineTaxPatch) return;
     if (lineTaxPatch.kind === "subscription") {
       setProductRows((rows) =>
-        rows.map((r) => ({ ...r, taxPercent: lineTaxPatch.taxPercent }))
+        rows.map((r) => ({
+          ...r,
+          taxPercent: lineTaxPatch.taxPercent,
+          taxMode: lineTaxPatch.mode,
+          taxSelectedIds: lineTaxPatch.selectedTaxIds,
+        }))
       );
       setSubscriptionTaxAdded(true);
     } else {
       setProductRows((rows) =>
         rows.map((r) =>
           r.id === lineTaxPatch.rowId
-            ? { ...r, taxPercent: lineTaxPatch.taxPercent }
+            ? {
+                ...r,
+                taxPercent: lineTaxPatch.taxPercent,
+                taxMode: lineTaxPatch.mode,
+                taxSelectedIds: lineTaxPatch.selectedTaxIds,
+              }
             : r
         )
       );
@@ -548,6 +610,8 @@ export function CreateSubscriptionModal({
         price: 0,
         qty: 1,
         taxPercent: null,
+        taxMode: null,
+        taxSelectedIds: null,
       },
       ...rows,
     ]);
@@ -597,6 +661,7 @@ export function CreateSubscriptionModal({
           </div>
         </div>
 
+        <TooltipProvider delayDuration={200}>
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-white p-4">
           <div className="flex flex-col gap-6">
             {/* Customer information — Figma 1161:89490: Header Lite row + Avatar with Label + bordered action */}
@@ -1085,11 +1150,71 @@ export function CreateSubscriptionModal({
                               </div>
                               <div className="flex h-9 w-[87px] shrink-0 items-center border-r border-[#d0d5dd] px-3">
                                 {row.taxPercent != null ? (
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-base font-medium text-[#475467]">
-                                      {row.taxPercent}%
-                                    </span>
-                                    <Info className="size-4 text-[#667085]" aria-hidden />
+                                  <div className="flex min-w-0 flex-1 items-center gap-0.5">
+                                    <button
+                                      type="button"
+                                      className="min-w-0 flex-1 truncate rounded text-left outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[#004eeb]/30"
+                                      onClick={() =>
+                                        onRequestAddLineItemTax({
+                                          kind: "line",
+                                          rowId: row.id,
+                                          productName:
+                                            row.name.trim() || "Product",
+                                          intent: "edit",
+                                          initialMode: row.taxMode ?? "manual",
+                                          initialSelectedTaxIds:
+                                            row.taxSelectedIds ?? [],
+                                        })
+                                      }
+                                    >
+                                      <span className="text-base font-medium text-[#475467]">
+                                        {row.taxPercent}%
+                                      </span>
+                                    </button>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          type="button"
+                                          className="inline-flex size-6 shrink-0 items-center justify-center rounded text-[#667085] outline-none hover:bg-[#f2f4f7] focus-visible:ring-2 focus-visible:ring-[#004eeb]/30"
+                                          aria-label="Tax breakdown"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <Info
+                                            className="size-4 shrink-0"
+                                            strokeWidth={2}
+                                            aria-hidden
+                                          />
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        side="top"
+                                        align="end"
+                                        sideOffset={4}
+                                        className={cn(
+                                          "z-[210] w-[min(280px,calc(100vw-2rem))] max-w-none text-left",
+                                          invoiceDarkTooltipClassName
+                                        )}
+                                      >
+                                        <div className="flex flex-col gap-0.5">
+                                          {getLineTaxBreakdown(row).map(
+                                            (line, i) => (
+                                              <div
+                                                key={`${line.name}-${i}`}
+                                                className="flex items-start justify-between gap-3 text-sm font-medium leading-5 text-white"
+                                              >
+                                                <span className="min-w-0 text-white">
+                                                  {line.name}: {line.ratePercent}%
+                                                </span>
+                                                <span className="shrink-0 tabular-nums text-white">
+                                                  ${line.amount.toFixed(2)}
+                                                </span>
+                                              </div>
+                                            )
+                                          )}
+                                        </div>
+                                        <TooltipArrow />
+                                      </TooltipContent>
+                                    </Tooltip>
                                   </div>
                                 ) : (
                                   <button
@@ -1112,6 +1237,7 @@ export function CreateSubscriptionModal({
                                         rowId: row.id,
                                         productName:
                                           row.name.trim() || "Product",
+                                        intent: "add",
                                       })
                                     }
                                   >
@@ -1126,21 +1252,87 @@ export function CreateSubscriptionModal({
                               </div>
                               <div className="flex h-9 w-12 shrink-0 items-center justify-center px-1">
                                 <DropdownMenu modal={false}>
-                                  <DropdownMenuTrigger asChild>
-                                    <button
-                                      type="button"
-                                      className="inline-flex size-6 items-center justify-center rounded text-[#667085] outline-none hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-[#004eeb]/30"
-                                      aria-label={`Actions for ${itemLabel}`}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <DropdownMenuTrigger asChild>
+                                        <button
+                                          type="button"
+                                          className={cn(
+                                            "box-border inline-flex size-6 items-center justify-center overflow-hidden rounded-[4px] p-1 text-[#667085] outline-none",
+                                            "hover:bg-[#f9fafb]",
+                                            "focus-visible:bg-[#f9fafb] focus-visible:shadow-[0px_1px_2px_0px_rgba(16,24,40,0.05),0px_0px_0px_4px_#f2f4f7]",
+                                            "data-[state=open]:bg-[#f2f4f7] data-[state=open]:shadow-none"
+                                          )}
+                                          aria-label={`Actions for ${itemLabel}`}
+                                        >
+                                          <MoreVertical
+                                            className="size-4 shrink-0"
+                                            strokeWidth={2}
+                                            aria-hidden
+                                          />
+                                        </button>
+                                      </DropdownMenuTrigger>
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                      side="top"
+                                      sideOffset={4}
+                                      className={cn(
+                                        "max-w-none text-left",
+                                        invoiceDarkTooltipClassName
+                                      )}
                                     >
-                                      <MoreVertical className="size-4" strokeWidth={2} />
-                                    </button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="z-[200]">
+                                      More actions
+                                      <TooltipArrow />
+                                    </TooltipContent>
+                                  </Tooltip>
+                                  <DropdownMenuContent
+                                    align="end"
+                                    sideOffset={4}
+                                    className="z-[200] w-max min-w-[240px] max-w-[min(calc(100vw-2rem),320px)] rounded-[4px] border border-[#d0d5dd] bg-white p-1 shadow-[0px_4px_8px_-2px_rgba(16,24,40,0.1),0px_2px_4px_-2px_rgba(16,24,40,0.06)]"
+                                  >
+                                    {row.taxPercent != null ? (
+                                      <>
+                                        <DropdownMenuItem
+                                          className={lineProductRowMenuItemClass}
+                                          onSelect={() =>
+                                            onRequestAddLineItemTax({
+                                              kind: "line",
+                                              rowId: row.id,
+                                              productName:
+                                                row.name.trim() || "Product",
+                                              intent: "edit",
+                                              initialMode:
+                                                row.taxMode ?? "manual",
+                                              initialSelectedTaxIds:
+                                                row.taxSelectedIds ?? [],
+                                            })
+                                          }
+                                        >
+                                          <Pencil
+                                            className="size-4 shrink-0 text-[#344054]"
+                                            strokeWidth={2}
+                                            aria-hidden
+                                          />
+                                          Edit tax
+                                        </DropdownMenuItem>
+                                        <div
+                                          className="my-1 h-px bg-[#e4e7ec]"
+                                          aria-hidden
+                                        />
+                                      </>
+                                    ) : null}
                                     <DropdownMenuItem
-                                      className="cursor-pointer"
+                                      className="cursor-pointer gap-2 rounded px-4 py-2 text-base font-medium leading-6 text-[#d92d20] data-[highlighted]:bg-[#f2f4f7] data-[highlighted]:text-[#d92d20]"
                                       onSelect={() => removeProductRow(row.id)}
                                     >
-                                      Remove line
+                                      <img
+                                        src="/icons/subscriptions/close.svg"
+                                        alt=""
+                                        width={16}
+                                        height={16}
+                                        className="size-4 shrink-0"
+                                      />
+                                      Remove product
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
@@ -1178,23 +1370,26 @@ export function CreateSubscriptionModal({
                             onClick={() => {
                               setCouponDraft(appliedCouponCode);
                               setCouponBarOpen(true);
-                              setCouponDropdownOpen(true);
+                              window.setTimeout(
+                                () => setCouponDropdownOpen(true),
+                                0
+                              );
                             }}
                           >
                             Change coupon
                           </button>
                           <button
                             type="button"
-                            className="inline-flex size-6 shrink-0 items-center justify-center rounded p-1.5 outline-none transition-colors hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-[#155eef]/30"
+                            className="inline-flex size-8 shrink-0 items-center justify-center rounded p-1 outline-none transition-colors hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-[#155eef]/30"
                             aria-label="Remove coupon"
                             onClick={clearSubscriptionCoupon}
                           >
                             <img
                               src="/icons/subscriptions/close.svg"
                               alt=""
-                              width={16}
-                              height={16}
-                              className="size-4 shrink-0"
+                              width={20}
+                              height={20}
+                              className="size-5 shrink-0"
                             />
                           </button>
                         </div>
@@ -1259,12 +1454,26 @@ export function CreateSubscriptionModal({
                         </DropdownMenu>
                         <button
                           type="button"
-                          className="inline-flex size-6 shrink-0 items-center justify-center rounded border border-[#84adff] bg-white p-1 shadow-[0px_1px_2px_0px_rgba(16,24,40,0.05)] outline-none transition-[border-color,box-shadow] duration-150 hover:bg-slate-50 focus-visible:border-[#84adff] focus-visible:shadow-[0_1px_2px_rgba(16,24,40,0.05),0_0_0_4px_#d1e0ff]"
+                          disabled={!couponDraft}
+                          title={
+                            !couponDraft
+                              ? "Select a coupon from the list first"
+                              : undefined
+                          }
+                          className={cn(
+                            "inline-flex size-6 shrink-0 items-center justify-center rounded border bg-white p-1 outline-none transition-[border-color,box-shadow] duration-150",
+                            couponDraft
+                              ? "border-[#84adff] shadow-[0px_1px_2px_0px_rgba(16,24,40,0.05)] hover:bg-slate-50 focus-visible:border-[#84adff] focus-visible:shadow-[0_1px_2px_rgba(16,24,40,0.05),0_0_0_4px_#d1e0ff]"
+                              : "cursor-not-allowed border-[#b2ccff] shadow-none disabled:opacity-100"
+                          )}
                           aria-label="Apply selected coupon"
                           onClick={confirmCouponSelection}
                         >
                           <Check
-                            className="size-3.5 text-[#155eef]"
+                            className={cn(
+                              "size-3.5",
+                              couponDraft ? "text-[#155eef]" : "text-[#b2ccff]"
+                            )}
                             strokeWidth={2}
                           />
                         </button>
@@ -1286,7 +1495,7 @@ export function CreateSubscriptionModal({
                       <div className="min-w-0 flex-1 px-3">
                         <button
                           type="button"
-                          className="text-base font-medium leading-6 text-[#00359e] transition-opacity hover:opacity-90"
+                          className="text-base font-medium leading-6 text-[#004eeb] transition-opacity hover:opacity-90 active:text-[#00359e]"
                           onClick={openCouponMenu}
                         >
                           Apply coupon
@@ -1298,56 +1507,69 @@ export function CreateSubscriptionModal({
                       />
                     </div>
                   )}
-                  {subscriptionTaxAdded ? (
+                  {hasLineItemTax ? (
                     <div className="flex flex-col gap-0.5">
                       <CalcSummaryRow
                         label="Taxable subtotal"
                         amount={taxableSubtotal.toFixed(2)}
                       />
-                      <div className="flex min-h-6 w-full items-start">
-                        <div className="flex min-w-0 flex-1 items-center px-3">
-                          <span className="min-w-0 text-base font-normal leading-6 text-[#101828]">
-                            {`Central tax (10% on $${taxableSubtotal.toFixed(2)})`}
-                          </span>
+                      {taxSummaryLines.map((line) => (
+                        <div
+                          key={line.key}
+                          className="flex min-h-6 w-full items-start"
+                        >
+                          <div className="flex min-w-0 flex-1 items-center px-3">
+                            <span className="min-w-0 text-base font-normal leading-6 text-[#101828]">
+                              {line.label}
+                            </span>
+                          </div>
+                          <CalcCurrencyMedium
+                            amount={line.amount.toFixed(2)}
+                          />
                         </div>
-                        <CalcCurrencyMedium
-                          amount={CENTRAL_TAX.toFixed(2)}
-                        />
-                      </div>
-                      <div className="flex min-h-6 w-full items-start">
-                        <div className="flex min-w-0 flex-1 items-center px-3">
-                          <span className="min-w-0 text-base font-normal leading-6 text-[#101828]">
-                            {`City tax (8% on $${taxableSubtotal.toFixed(2)})`}
-                          </span>
-                        </div>
-                        <CalcCurrencyMedium amount={CITY_TAX.toFixed(2)} />
-                      </div>
+                      ))}
                       <div className="flex min-h-6 w-full items-center">
                         <div className="flex min-w-0 flex-1 items-center gap-0.5 px-3">
                           <button
                             type="button"
                             className="text-base font-medium text-[#004eeb] transition-opacity hover:opacity-90"
-                            onClick={() =>
-                              onRequestAddLineItemTax({
-                                kind: "subscription",
-                                intent: "edit",
-                              })
-                            }
+                            onClick={() => {
+                              if (subscriptionTaxAdded) {
+                                onRequestAddLineItemTax({
+                                  kind: "subscription",
+                                  intent: "edit",
+                                });
+                              } else {
+                                const row = productRows.find(
+                                  (r) => r.taxPercent != null
+                                );
+                                if (!row) return;
+                                onRequestAddLineItemTax({
+                                  kind: "line",
+                                  rowId: row.id,
+                                  productName: row.name.trim() || "Product",
+                                  intent: "edit",
+                                  initialMode: row.taxMode ?? "manual",
+                                  initialSelectedTaxIds:
+                                    row.taxSelectedIds ?? [],
+                                });
+                              }
+                            }}
                           >
                             Edit tax
                           </button>
                           <button
                             type="button"
-                            className="inline-flex size-6 shrink-0 items-center justify-center rounded p-1.5 outline-none transition-colors hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-[#155eef]/30"
+                            className="inline-flex size-8 shrink-0 items-center justify-center rounded p-1 outline-none transition-colors hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-[#155eef]/30"
                             aria-label="Remove tax"
                             onClick={clearSubscriptionTax}
                           >
                             <img
                               src="/icons/subscriptions/close.svg"
                               alt=""
-                              width={16}
-                              height={16}
-                              className="size-4 shrink-0"
+                              width={20}
+                              height={20}
+                              className="size-5 shrink-0"
                             />
                           </button>
                         </div>
@@ -1636,6 +1858,7 @@ export function CreateSubscriptionModal({
             ) : null}
           </div>
         </div>
+        </TooltipProvider>
 
         <div className="shrink-0 border-t border-[#d0d5dd] pb-3 pt-3">
           <div className="flex justify-end gap-3 px-4">

@@ -45,6 +45,8 @@ export function SubscriptionsHeader() {
         rowId: string;
         productName: string;
         intent: "add" | "edit";
+        initialMode?: TaxMode;
+        initialSelectedTaxIds?: string[];
       }
     | { kind: "subscription"; intent: "add" | "edit" }
     | null
@@ -55,8 +57,19 @@ export function SubscriptionsHeader() {
     selectedTaxIds: string[];
   } | null>(null);
   const [lineTaxPatch, setLineTaxPatch] = useState<
-    | { kind: "line"; rowId: string; taxPercent: number }
-    | { kind: "subscription"; taxPercent: number }
+    | {
+        kind: "line";
+        rowId: string;
+        taxPercent: number;
+        mode: TaxMode;
+        selectedTaxIds: string[];
+      }
+    | {
+        kind: "subscription";
+        taxPercent: number;
+        mode: TaxMode;
+        selectedTaxIds: string[];
+      }
     | null
   >(null);
   const onLineTaxPatchConsumed = useCallback(() => setLineTaxPatch(null), []);
@@ -134,6 +147,8 @@ export function SubscriptionsHeader() {
                   rowId: payload.rowId,
                   productName: payload.productName,
                   intent: payload.intent ?? "add",
+                  initialMode: payload.initialMode,
+                  initialSelectedTaxIds: payload.initialSelectedTaxIds,
                 }
           );
           setLineItemTaxKey((k) => k + 1);
@@ -179,17 +194,24 @@ export function SubscriptionsHeader() {
         }
         intent={lineItemTaxContext?.intent ?? "add"}
         initialMode={
-          lineItemTaxContext?.kind === "subscription" &&
+          lineItemTaxContext?.kind === "line" &&
           lineItemTaxContext.intent === "edit"
-            ? subscriptionTaxSelection?.mode
-            : undefined
+            ? lineItemTaxContext.initialMode
+            : lineItemTaxContext?.kind === "subscription" &&
+                lineItemTaxContext.intent === "edit"
+              ? subscriptionTaxSelection?.mode
+              : undefined
         }
         initialSelectedTaxIds={
-          lineItemTaxContext?.kind === "subscription" &&
+          lineItemTaxContext?.kind === "line" &&
           lineItemTaxContext.intent === "edit" &&
-          subscriptionTaxSelection?.mode === "manual"
-            ? subscriptionTaxSelection.selectedTaxIds
-            : undefined
+          (lineItemTaxContext.initialMode ?? "manual") === "manual"
+            ? lineItemTaxContext.initialSelectedTaxIds
+            : lineItemTaxContext?.kind === "subscription" &&
+                lineItemTaxContext.intent === "edit" &&
+                subscriptionTaxSelection?.mode === "manual"
+              ? subscriptionTaxSelection.selectedTaxIds
+              : undefined
         }
         onOpenChange={(next) => {
           if (!next) {
@@ -201,17 +223,23 @@ export function SubscriptionsHeader() {
         onSave={({ taxPercent, mode, selectedTaxIds }) => {
           const ctx = lineItemTaxContext;
           if (!ctx) return;
+          const ids = mode === "manual" ? selectedTaxIds : [];
           if (ctx.kind === "subscription") {
             setSubscriptionTaxSelection({
               mode,
-              selectedTaxIds:
-                mode === "manual" ? selectedTaxIds : [],
+              selectedTaxIds: ids,
             });
           }
           setLineTaxPatch(
             ctx.kind === "subscription"
-              ? { kind: "subscription", taxPercent }
-              : { kind: "line", rowId: ctx.rowId, taxPercent }
+              ? { kind: "subscription", taxPercent, mode, selectedTaxIds: ids }
+              : {
+                  kind: "line",
+                  rowId: ctx.rowId,
+                  taxPercent,
+                  mode,
+                  selectedTaxIds: ids,
+                }
           );
           setAddLineItemTaxOpen(false);
           setLineItemTaxContext(null);
