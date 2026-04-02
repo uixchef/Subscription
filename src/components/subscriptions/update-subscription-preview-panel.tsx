@@ -6,7 +6,6 @@ import {
   ClipboardCheck,
   Info,
   RefreshCw,
-  Repeat2,
 } from "lucide-react";
 import { useMemo } from "react";
 
@@ -381,19 +380,16 @@ export function UpdateSubscriptionPreviewPanel({
             <div className="flex shrink-0 flex-col bg-white py-4 pl-0 pr-4">
               <div className="ml-auto flex w-full max-w-[330px] flex-col gap-1">
                 <BreakdownRow
-                  icon
                   label="Subtotal"
                   value={`$${lineSubtotal.toFixed(2)}`}
                 />
                 {discountAdded ? (
                   <BreakdownRow
-                    icon
                     label={`Discount (${couponCode})`}
                     value={`-$${discountAmount.toFixed(2)}`}
                   />
                 ) : null}
                 <BreakdownRow
-                  icon
                   label="Taxable subtotal"
                   value={`$${taxableSubtotal.toFixed(2)}`}
                 />
@@ -401,7 +397,6 @@ export function UpdateSubscriptionPreviewPanel({
                   ? taxSummaryLines.map((tl) => (
                       <BreakdownRow
                         key={tl.key}
-                        icon
                         label={tl.label}
                         value={`$${tl.amount.toFixed(2)}`}
                       />
@@ -409,13 +404,11 @@ export function UpdateSubscriptionPreviewPanel({
                   : null}
                 <Separator className="my-2 w-full bg-[#eaecf0]" />
                 <BreakdownRow
-                  icon
                   label="Amount due"
                   value={`$${amountDue.toFixed(2)}`}
                   emphasize
                 />
                 <BreakdownRow
-                  icon
                   label="Amount due after trial"
                   value={`$${amountDue.toFixed(2)}`}
                   emphasize
@@ -430,26 +423,17 @@ export function UpdateSubscriptionPreviewPanel({
 }
 
 function BreakdownRow({
-  icon,
   label,
   value,
   emphasize,
 }: {
-  icon?: boolean;
   label: string;
   value: string;
   emphasize?: boolean;
 }) {
   return (
     <div className="flex w-full items-start gap-0">
-      <div className="flex min-w-0 flex-1 items-start gap-1 px-3">
-        {icon ? (
-          <Repeat2
-            className="mt-0.5 size-4 shrink-0 text-[#101828]"
-            strokeWidth={2}
-            aria-hidden
-          />
-        ) : null}
+      <div className="flex min-w-0 flex-1 px-3">
         <span className="min-w-0 text-base font-medium leading-6 text-[#101828]">
           {label}
         </span>
