@@ -153,6 +153,8 @@ npm run lint                 # eslint
 ## Folder structure (meaningful)
 
 ```
+docs/
+  screenshots/         # README demo images (PNG)
 src/
   app/                 # routes: hub layout, subscriptions list & detail, payments placeholder
   components/
@@ -166,9 +168,39 @@ src/
 
 ## Screenshots / demo
 
-![subscriptions dashboard](docs/screenshots/subscriptions-dashboard.png)
+Assets live in `docs/screenshots/` and render on the repo home page for visitors.
 
-*Subscription list (Payments hub). Add more PNGs under `docs/screenshots/` and link them here—for example `detail.png` and `update-preview.png`—when you have captures for subscription detail and update subscription preview.*
+### Subscription dashboard
+
+*Empty state (no subscriptions yet) and populated list with filters, sort, search, and pagination.*
+
+![subscriptions dashboard — empty state](docs/screenshots/subscriptions-dashboard-empty.png)
+
+![subscriptions dashboard — populated](docs/screenshots/subscriptions-dashboard.png)
+
+### Create subscription
+
+*Modal flow: catalog line items, live vs test, apply coupon / add tax, and totals.*
+
+![create new subscription — empty products](docs/screenshots/create-subscription-empty.png)
+
+![create new subscription — line items, coupon, and tax](docs/screenshots/create-subscription-line-items.png)
+
+### Update subscription
+
+*Edit products, coupon, and dates with a live calculations / next-charge preview.*
+
+![update subscription — form and calculations sidebar](docs/screenshots/update-subscription.png)
+
+### Pause, resume, and cancel
+
+*Pause duration and invoice behavior, simple resume confirm, and immediate cancel confirmation.*
+
+![pause subscription](docs/screenshots/pause-subscription.png)
+
+![resume subscription](docs/screenshots/resume-subscription.png)
+
+![cancel subscription](docs/screenshots/cancel-subscription.png)
 
 ---
 
