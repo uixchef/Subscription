@@ -1,77 +1,193 @@
-# Subscription — Payments Hub UI
+# HighLevel Subscriptions — System Rebuild
 
-A **Next.js** front-end for managing subscriptions inside a **Payment Hub** shell: sidebar navigation, top bar, and a subscriptions list with per-subscription detail views. The experience is modeled after a CRM-style hub (e.g. HighLevel-style layout); **business data created in the UI is stored in the browser** (`sessionStorage`) for prototyping—there is no backend API in this repo.
+**A ground-up redesign of the Subscriptions product** for HighLevel: not a patch on legacy flows, but a coherent subscription system spanning dashboard, lifecycle management, and billing-adjacent controls—built to the standard expected of modern SaaS billing surfaces (clarity, previewability, and safe handling of money-moving actions).
 
-## What’s in the box
+The attached PRDs cover important depth (proration, charge-date moves, coupon changes, automated cancellation). They are **supporting artifacts**. The actual scope is broader: full **Subscription Dashboard**, **Subscription Details**, **Create / Update / Cancel / Pause** flows, **advanced filtering**, and resilient **state handling** across long-running management tasks.
 
-- **Hub chrome**: collapsible sidebar, top bar, toast region, responsive layout (`PaymentHubShell`).
-- **Subscriptions list** (`/subscriptions`): table with toolbar, pagination, and navigation to detail.
-- **Subscription detail** (`/subscriptions/[subscriptionId]`): status, billing, line items, transactions, customer and payment actions.
-- **Flows (UI)**: create subscription, edit customer, add/update payment method, pause, resume, cancel, tax/line-item modals, and related validation helpers (postal/phone by region).
+---
 
-The home route redirects to `/subscriptions`.
+## Why This System Exists
 
-## Tech stack
+**Traditional subscription UIs often fail in three ways:**
 
-| Area | Choice |
-|------|--------|
-| Framework | [Next.js](https://nextjs.org) 16 (App Router) |
-| UI | React 19, [Tailwind CSS](https://tailwindcss.com) 4 |
-| Components | [Radix UI](https://www.radix-ui.com) primitives, [shadcn](https://ui.shadcn.com)-style patterns (`src/components/ui`) |
-| Icons | [Lucide React](https://lucide.dev) |
-| Scripts | `dev` runs on **port 4000** (see below) |
+1. **Inflexibility** — Charge alignment, coupons, and lifecycle outcomes are treated as one-off exceptions, forcing cancellations and recreations instead of in-place correction.
+2. **Opaque billing actions** — Complex updates (mid-cycle product changes, date moves) lack previews and clear rules, so operators guess—or open tickets.
+3. **Operational debt** — Refunds, manual adjustments, and support escalations replace **first-class product behavior** (proration, credits, forward-dated coupon impact, scheduled cancellation).
 
-## Prerequisites
+**This system exists to replace that debt with explicit rules, visible outcomes, and flows that match how recurring revenue actually behaves**—from first subscription through change, pause, resume, and end-of-life—manual or automated.
 
-- **Node.js** 20+ (aligns with `engines` expectations for modern Next; Node 24 is the current Vercel default)
-- **npm** (or use your preferred package manager consistently)
+---
 
-## Getting started
+## System Overview
+
+The rebuild treats subscriptions as **managed objects** with a full lifecycle:
+
+| Phase | What the system covers |
+|--------|-------------------------|
+| **Origination** | Create subscription with correct line items, tax posture, and payment context |
+| **Observation** | Dashboard and detail views with scannable status and drill-down |
+| **Modification** | Deep update flows (products, quantities, dates, coupons, proration posture) |
+| **Interruption** | Pause and resume without losing the mental model of “what happens next” |
+| **Termination** | Cancel now vs scheduled / end-of-cycle, including automation at account level |
+| **Governance** | Filters and state that stay honest as volume and edge cases grow |
+
+The PRD-backed capabilities (proration, charge date, coupon modification, auto-cancellation setting) **slot into this lifecycle** as precision instruments—not isolated features.
+
+---
+
+## Core Product Flows
+
+### Create Subscription
+
+Establishes the subscription with the right **defaults and guardrails** so later updates are deltas, not rescue missions. Creation is the contract: what is sold, how it bills, and under which tax/coupon assumptions.
+
+### Update Subscription *(primary complexity surface)*
+
+Where most systems leak. This flow is designed for **stacked changes** with:
+
+- **Billing previews** before commit (next charge, future recurring, and—where applicable—proration lines).
+- **Explicit toggles and modes** (e.g. proration on vs off; immediate vs next-cycle settlement) so behavior is never implicit.
+- **Charge date rescheduling** as a first-class anchor move: charges due before the new date still run; the cycle resets on the selected date; frequency continues from the new anchor—reducing “cancel and recreate” workflows.
+
+Supporting PRD depth includes **coupon modification** (add / remove / replace) with **forward-only financial impact**—past transactions and the original order stay intact; previews show updated next and future charges.
+
+### View Subscription Details
+
+A **single source of truth** in the UI: status, payment context, line items, and transaction history—aligned with what update and cancel flows assert, so operators never fight two different stories.
+
+### Pause / Resume
+
+Pause is modeled as a **lifecycle state** with clear user messaging (what stops, what resumes, and what billing previews imply). Resume reconnects the operator to the same detail and update surfaces without ambiguity.
+
+### Cancel
+
+Supports **immediate** cancellation paths and **scheduled / end-of-cycle** outcomes. Complements **account-level auto cancellation** (see Advanced Capabilities): when enabled, subscriptions can terminate automatically at cycle or scheduled end—reducing manual dashboard/API churn.
+
+### Dashboard & Filtering
+
+The dashboard is built for **volume and triage**: find the right subscription quickly, trust filters and state, and jump into detail or update without losing context. Advanced filters and state handling are first-class so the UI stays usable as the account grows.
+
+**Edge cases surfaced in product scope (non-exhaustive):**
+
+- Proration on product, quantity, and charge-date changes—with optional timing of charge (cycle vs immediate); taxes on prorated amounts; credits as applied balance; **no** proration trigger for coupon-only edits (by design).
+- Charge date changes with **future-only** selection, preview of charges before and after the anchor, and lifecycle rules once the anchor date is reached (including subsequent edits via dedicated affordances).
+- Coupon updates with **preview of next and recurring** charges; redundant remove/re-add of the same code does not create noise.
+- Pause interactions that do not pretend billing is “paused” in ambiguous ways—copy and previews carry the burden.
+- Destructive flows (cancellation, irreversible automation) with **clear subcopy and tooltips** where the product demands it.
+
+---
+
+## Advanced Capabilities
+
+| Capability | Role in the system |
+|------------|---------------------|
+| **Proration** | Mid-cycle accuracy when products, quantities, or charge dates change—optional, toggleable, with immediate vs next-cycle settlement and tax-aware lines. |
+| **Charge date rescheduling** | Moves the billing anchor without rewriting history; previews show continuity across the transition. |
+| **Coupon modification** | Business agility post-creation: changes affect **upcoming and future** charges only; preview-driven transparency. |
+| **Auto cancellation setting** | Central control to end subscriptions at **end of billing cycle** or **scheduled end date**, with explicit irreversibility and API alignment—reducing one-off manual cancels. |
+
+---
+
+## UX & Product Thinking
+
+- **Complexity is pushed into structured surfaces**—update is one modal system with sections, not a dozen disconnected dialogs.
+- **Previews and helper text** carry the economics: users see *what will happen* before it happens.
+- **Guardrails on irreversible actions**—cancellation and automation copy state consequences plainly (including pending payment realities where scoped).
+- **Trade-offs are explicit**—e.g. coupon edits don’t trigger proration logic; proration is opt-in by default; auto-cancel is off by default. Defaults favor predictability; power sits behind clear controls.
+
+---
+
+## System Architecture
+
+- **Component architecture** — Feature modules under a hub shell (`payment-hub`) and domain folders (`subscriptions`) separate **chrome** (nav, layout, toasts) from **flows** (create, update, detail, pause, cancel).
+- **State** — Client-side state is organized around **subscription rows**, **user-created snapshots**, and **update hydration** so modals re-open with coherent context (line items, coupon, tax selections). The pattern scales to API-backed sources by swapping persistence boundaries.
+- **API interactions** — Flows are structured to align with **subscription management** and **payments/transactions** contracts (create/update/cancel, previews, logging). Provider diversity (e.g. Stripe, PayPal, custom) is assumed at the platform layer; the UI keeps **parity between displayed previews and server intent**.
+- **Separation of concerns** — **Presentation** (tables, modals, banners) vs **domain helpers** (validation, postal/phone rules, tax catalogs, pagination) vs **persistence adapters**—so billing rules can evolve without rewriting every screen.
+
+---
+
+## Scalability & Extensibility
+
+- **Multiple payment providers** — Row model and UI patterns treat provider as data, not as a forked UI per gateway.
+- **High subscription volume** — Dashboard and filtering are built for scan-and-drill workflows; tables and toolbars avoid one-off pagination hacks.
+- **Future billing features** — New capabilities plug in as **additional update sections**, **settings toggles**, or **preview line types** without re-architecting the shell.
+
+---
+
+## Tech Stack
+
+| Technology | Purpose |
+|------------|---------|
+| **Next.js** (App Router) | Routing, layouts, and production-ready React delivery for the hub and subscription routes. |
+| **React** | Composable UI for dense management surfaces (tables, modals, wizards). |
+| **TypeScript** | Shared models for subscription rows, snapshots, and update payloads—fewer drift bugs between list and detail. |
+| **Tailwind CSS** | Consistent spacing, density, and responsive behavior aligned to a hub layout. |
+| **Radix UI** | Accessible primitives for dialogs, menus, tabs, and tooltips—critical for destructive and financial flows. |
+
+---
+
+## Developer Experience
+
+- **Modularity** — Subscription flows are split by concern (detail view, update preview panels, storage helpers) so changes stay localized.
+- **Reusability** — Shared UI primitives and subscription row modeling reduce duplication between list and detail.
+- **Extending Update Subscription** — New fields follow the same pattern: model extension → modal section → preview panel → persistence contract—keeping UX and data aligned.
+
+---
+
+## Setup
 
 ```bash
-cd my-app
 npm install
 npm run dev
 ```
 
-Open [http://localhost:4000](http://localhost:4000). The dev server is configured for port **4000** in `package.json` (`next dev --webpack -p 4000`).
+Dev server runs on **port 4000** (see `package.json`). Open `http://localhost:4000` (root redirects to `/subscriptions`).
 
-Other scripts:
+```bash
+npm run build && npm start   # production
+npm run lint                 # eslint
+```
 
-| Script | Purpose |
-|--------|---------|
-| `npm run dev` | Dev server (webpack), port 4000 |
-| `npm run dev:turbo` | Dev with Turbopack, port 4000 |
-| `npm run dev:clean` | Clear `.next` then dev |
-| `npm run build` | Production build |
-| `npm run start` | Start production server (after `build`) |
-| `npm run lint` | ESLint |
+---
 
-## Data and persistence
-
-- **Created subscriptions** and several related slices (e.g. customer directory, row updates) use **`sessionStorage`** with versioned keys. Clearing site data or closing the session resets that state.
-- Seeded/demo data lives in modules such as `customer-demo-data.ts` where applicable.
-- Treat this as a **product/design prototype**, not a source of truth for production billing.
-
-## Project layout (high level)
+## Folder Structure (meaningful)
 
 ```
 src/
-  app/
-    (hub)/           # Hub layout: subscriptions, payments placeholder
-    layout.tsx       # Root layout
-    page.tsx         # Redirects to /subscriptions
+  app/                 # Routes: hub layout, subscriptions list & detail, payments placeholder
   components/
-    payment-hub/     # Shell, sidebar, top bar, toasts
-    subscriptions/   # Feature UI, modals, tables, storage helpers
-    ui/                # Shared primitives (button, dialog, etc.)
-  lib/                 # Shared utilities (dates, etc.)
+    payment-hub/       # Shell: sidebar, top bar, toasts
+    subscriptions/     # Feature: tables, modals, detail, previews, domain helpers
+    ui/                  # Shared primitives (button, dialog, input, …)
+  lib/                   # Cross-cutting utilities (e.g. date formatting)
 ```
 
-## Deploy
+---
 
-You can deploy to [Vercel](https://vercel.com) or any host that supports Next.js. Configure environment variables only if you extend the app with real APIs—this codebase does not require secrets for the default local-storage behavior.
+## Screenshots / Demo
+
+<!-- Add: Dashboard (filtered) -->
+![Subscriptions dashboard](docs/screenshots/dashboard.png)
+
+<!-- Add: Subscription detail -->
+![Subscription details](docs/screenshots/detail.png)
+
+<!-- Add: Update subscription — preview -->
+![Update subscription preview](docs/screenshots/update-preview.png)
+
+*Replace paths after adding assets under `docs/screenshots/` or your preferred docs folder.*
+
+---
+
+## Future Enhancements
+
+- Deeper **observability** on update and cancel paths (structured analytics, funnel health)—without crowding the operator UI.
+- **Grace periods and notification hooks** where product policy allows (explicitly out of scope for some PRD phases—worth revisiting as automation matures).
+- **Public API parity** examples alongside UI flows for integrators.
+- **Richer multi-currency / multi-frequency** modeling once platform rules expand beyond current PRD boundaries.
+
+---
 
 ## License
 
-Private project (`"private": true` in `package.json`). All rights reserved unless you add an explicit license file.
+Private / internal use unless a public license is added.
