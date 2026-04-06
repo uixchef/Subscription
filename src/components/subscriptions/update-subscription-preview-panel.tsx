@@ -1,17 +1,16 @@
 "use client";
 
-import {
-  Calendar,
-  Check,
-  ClipboardCheck,
-  Info,
-  RefreshCw,
-} from "lucide-react";
+import { Check, Info } from "lucide-react";
 import { useMemo } from "react";
 
 import { Separator } from "@/components/ui/separator";
+import {
+  buildUpdatePreviewSummarySteps,
+  SummaryTimelineStep,
+} from "@/components/subscriptions/subscription-summary-timeline";
+import type { SubscriptionRow } from "@/components/subscriptions/subscription-row-model";
 import type { SubscriptionTaxDisplayLine } from "@/components/subscriptions/tax-catalog";
-import { formatDateMMDDYYYY, parseMMDDYYYY } from "@/lib/date-format";
+import { parseMMDDYYYY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 
 function naturalQty(n: number): number {
@@ -28,20 +27,7 @@ function formatUsdParts(n: number): { dollars: string; cents: string } {
   return { dollars: a!, cents: b };
 }
 
-/** Figma Summary: "30 Oct, 2025" */
-function formatDayMonthCommaYear(d: Date): string {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).formatToParts(d);
-  const day = parts.find((p) => p.type === "day")?.value ?? "";
-  const month = parts.find((p) => p.type === "month")?.value ?? "";
-  const year = parts.find((p) => p.type === "year")?.value ?? "";
-  return `${day} ${month}, ${year}`;
-}
-
-/** Figma: “July 24, 2025” from internal MM/DD/YYYY labels. */
+/** Long due date for calculations header — matches subscription detail phrasing. */
 function formatDueDateLong(usMdY: string): string {
   if (!/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(usMdY.trim())) {
     return usMdY;
@@ -58,27 +44,6 @@ function formatDueDateLong(usMdY: string): string {
   }
 }
 
-function formatDueDateLongFromDate(d: Date): string {
-  return formatDueDateLong(formatDateMMDDYYYY(d));
-}
-
-/** Figma reset row: "Bills 8 October, 2025" */
-function formatBillsResetLine(d: Date): string {
-  const rest = d.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-  return `Bills ${rest}`;
-}
-
-function calendarMonthsBetween(a: Date, b: Date): number {
-  return Math.max(
-    0,
-    (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth())
-  );
-}
-
 type PreviewLine = {
   name: string;
   price: number;
@@ -86,150 +51,17 @@ type PreviewLine = {
   taxPercent: number | null;
 };
 
-type SummaryTimelineProps = {
-  amountDue: number;
-  summaryStartDate: Date;
-  summaryNextChargeDate: Date;
-  summaryFrequencyEnabled: boolean;
-  summaryFrequencyStartDate: Date;
-  summaryFrequencyEndDate: Date;
-};
-
 /**
- * Figma 1159:50354 — Summary tab: vertical progress steps + connector line.
- */
-function SummaryTimeline({
-  amountDue,
-  summaryStartDate,
-  summaryNextChargeDate,
-  summaryFrequencyEnabled,
-  summaryFrequencyStartDate,
-  summaryFrequencyEndDate,
-}: SummaryTimelineProps) {
-  const amt = amountDue.toFixed(2);
-  const cyclesBetween = summaryFrequencyEnabled
-    ? Math.max(0, calendarMonthsBetween(
-        summaryFrequencyStartDate,
-        summaryFrequencyEndDate
-      ))
-    : 2;
-  const milestoneTitle = formatDueDateLongFromDate(
-    summaryFrequencyEnabled
-      ? summaryFrequencyEndDate
-      : summaryNextChargeDate
-  );
-
-  const steps: Array<{
-    key: string;
-    Icon: typeof Calendar;
-    title: string;
-    lines: Array<{ text: string; weight: "medium" | "normal" }>;
-    showConnector: boolean;
-  }> = [
-    {
-      key: "immediate",
-      Icon: Calendar,
-      title: formatDayMonthCommaYear(summaryStartDate),
-      lines: [
-        {
-          text: "Billed immediately for 1 month",
-          weight: "medium",
-        },
-      ],
-      showConnector: true,
-    },
-    {
-      key: "next",
-      Icon: ClipboardCheck,
-      title: "Next payment",
-      lines: [
-        { text: `Amount due $${amt}`, weight: "medium" },
-        {
-          text: `Bills on ${formatDayMonthCommaYear(summaryNextChargeDate)} for 1 month`,
-          weight: "normal",
-        },
-      ],
-      showConnector: true,
-    },
-    {
-      key: "cycles",
-      Icon: Check,
-      title: "Billing cycles",
-      lines: [{ text: `In between: ${cyclesBetween}`, weight: "medium" }],
-      showConnector: true,
-    },
-    {
-      key: "future",
-      Icon: Calendar,
-      title: milestoneTitle,
-      lines: [
-        { text: `Amount due $${amt}`, weight: "medium" },
-        { text: "Subscription updates", weight: "normal" },
-      ],
-      showConnector: true,
-    },
-    {
-      key: "reset",
-      Icon: RefreshCw,
-      title: "Reset billing cycle",
-      lines: [{ text: formatBillsResetLine(summaryNextChargeDate), weight: "medium" }],
-      showConnector: false,
-    },
-  ];
-
-  return (
-    <div className="flex w-full max-w-[276px] flex-col">
-      {steps.map((step) => (
-        <div key={step.key} className="flex gap-2">
-          <div className="flex w-7 shrink-0 flex-col items-center">
-            <div className="flex size-7 shrink-0 items-center justify-center rounded-full border border-[#475467] bg-white">
-              <step.Icon
-                className="size-4 text-[#475467]"
-                strokeWidth={2}
-                aria-hidden
-              />
-            </div>
-            {step.showConnector ? (
-              <div className="mt-0 min-h-4 w-px flex-1 bg-[#475467]" aria-hidden />
-            ) : null}
-          </div>
-          <div className="min-w-0 flex-1 pb-4">
-            <p className="text-base font-semibold leading-6 text-[#101828]">
-              {step.title}
-            </p>
-            <div className="mt-0.5 flex flex-col gap-0.5">
-              {step.lines.map((line, i) => (
-                <p
-                  key={`${step.key}-l-${i}`}
-                  className={cn(
-                    "text-sm leading-5 text-[#475467]",
-                    line.weight === "medium" ? "font-medium" : "font-normal"
-                  )}
-                >
-                  {line.text}
-                </p>
-              ))}
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/**
- * Figma 1159:103379 — Preview: tabs, Summary timeline or Calculations table + breakdown.
+ * Figma 1159:103379 — Preview: tabs, Summary (same rail as View subscription) or Calculations.
  */
 export function UpdateSubscriptionPreviewPanel({
   activeTab,
   onTabChange,
+  subscriptionRow,
   amountDue,
   dueDateLabel,
   summaryStartDate,
   summaryNextChargeDate,
-  summaryFrequencyEnabled,
-  summaryFrequencyStartDate,
-  summaryFrequencyEndDate,
   lines,
   lineSubtotal,
   taxableSubtotal,
@@ -241,13 +73,11 @@ export function UpdateSubscriptionPreviewPanel({
 }: {
   activeTab: "summary" | "calculations";
   onTabChange: (t: "summary" | "calculations") => void;
+  subscriptionRow: SubscriptionRow;
   amountDue: number;
   dueDateLabel: string;
   summaryStartDate: Date;
   summaryNextChargeDate: Date;
-  summaryFrequencyEnabled: boolean;
-  summaryFrequencyStartDate: Date;
-  summaryFrequencyEndDate: Date;
   lines: PreviewLine[];
   lineSubtotal: number;
   taxableSubtotal: number;
@@ -261,6 +91,22 @@ export function UpdateSubscriptionPreviewPanel({
   const dueLong = useMemo(
     () => formatDueDateLong(dueDateLabel),
     [dueDateLabel]
+  );
+
+  const summarySteps = useMemo(
+    () =>
+      buildUpdatePreviewSummarySteps(
+        subscriptionRow,
+        summaryStartDate,
+        summaryNextChargeDate,
+        amountDue
+      ),
+    [
+      subscriptionRow,
+      summaryStartDate,
+      summaryNextChargeDate,
+      amountDue,
+    ]
   );
 
   return (
@@ -300,14 +146,17 @@ export function UpdateSubscriptionPreviewPanel({
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden bg-[#f2f4f7] p-4">
         {activeTab === "summary" ? (
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-            <SummaryTimeline
-              amountDue={amountDue}
-              summaryStartDate={summaryStartDate}
-              summaryNextChargeDate={summaryNextChargeDate}
-              summaryFrequencyEnabled={summaryFrequencyEnabled}
-              summaryFrequencyStartDate={summaryFrequencyStartDate}
-              summaryFrequencyEndDate={summaryFrequencyEndDate}
-            />
+            <ol className="m-0 flex list-none flex-col px-1 py-0">
+              {summarySteps.map((step, i) => (
+                <SummaryTimelineStep
+                  key={`${step.title}-${i}`}
+                  icon={step.icon}
+                  title={step.title}
+                  lines={step.lines}
+                  showConnectorAfter={step.showConnectorAfter}
+                />
+              ))}
+            </ol>
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[4px] bg-white shadow-[0px_4px_8px_-2px_rgba(16,24,40,0.1),0px_2px_4px_-2px_rgba(16,24,40,0.06)]">

@@ -1,4 +1,5 @@
 import { SUBSCRIPTION_TOTAL_ROWS } from "@/components/subscriptions/subscriptions-constants";
+import type { TaxMode } from "@/components/subscriptions/tax-catalog";
 import { formatDateMMDDYYYY } from "@/lib/date-format";
 
 export type SubscriptionStatus =
@@ -18,6 +19,9 @@ export type CreatedProductLineSnapshot = {
   price: number;
   qty: number;
   taxPercent: number | null;
+  /** Persisted from Add tax modal — required to restore manual multi-select on update. */
+  taxMode?: TaxMode | null;
+  taxSelectedIds?: string[] | null;
 };
 
 export type SubscriptionRow = {
@@ -32,6 +36,13 @@ export type SubscriptionRow = {
   paymentMode: SubscriptionPaymentMode;
   /** When set (hub create flow), product table shows these lines instead of generated demo rows. */
   createdProductLines?: CreatedProductLineSnapshot[];
+  /**
+   * Rehydrates Create/Update subscription modal (coupon, business tax ID).
+   * Omitted on legacy/mock rows — update modal applies defaults.
+   */
+  savedCouponCode?: string;
+  savedCouponDiscountAmount?: number;
+  savedBusinessTaxId?: string;
 };
 
 type SubscriptionRowSeed = Pick<

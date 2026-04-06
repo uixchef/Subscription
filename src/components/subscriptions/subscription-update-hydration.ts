@@ -1,5 +1,6 @@
 import { parseUsdToCents } from "@/components/subscriptions/subscription-detail-derived-data";
 import type { SubscriptionRow } from "@/components/subscriptions/subscription-row-model";
+import type { TaxMode } from "@/components/subscriptions/tax-catalog";
 
 function seedFromRowId(rowId: string): number {
   let h = 2166136261;
@@ -34,6 +35,8 @@ export type EditableProductLineSeed = {
   price: number;
   qty: number;
   taxPercent: number | null;
+  taxMode?: TaxMode | null;
+  taxSelectedIds?: string[] | null;
 };
 
 /**
@@ -49,6 +52,8 @@ export function subscriptionRowToEditableProductLines(
       price: l.price,
       qty: naturalQty(l.qty),
       taxPercent: l.taxPercent,
+      taxMode: l.taxMode ?? null,
+      taxSelectedIds: l.taxSelectedIds ?? null,
     }));
   }
   const cents = parseUsdToCents(row.amount);
@@ -89,4 +94,22 @@ export function customerDirectoryIdForSubscriptionRow(
   const target = row.customer.name.trim().toLowerCase();
   const match = customers.find((c) => c.name.trim().toLowerCase() === target);
   return match?.id ?? "";
+}
+
+/** Default line tax % when a subscription row has no per-line tax (typical “already purchased” state). */
+const DEFAULT_UPDATE_LINE_TAX_PERCENTS = [10, 8, 8] as const;
+
+/**
+ * If no line has tax, assign default rates so the update modal shows tax like a completed checkout.
+ */
+export function seedDefaultLineTaxesForUpdateModal(
+  lines: EditableProductLineSeed[]
+): EditableProductLineSeed[] {
+  if (lines.some((l) => l.taxPercent != null)) {
+    return lines.map((l) => ({ ...l }));
+  }
+  return lines.map((l, i) => ({
+    ...l,
+    taxPercent: DEFAULT_UPDATE_LINE_TAX_PERCENTS[i] ?? 8,
+  }));
 }

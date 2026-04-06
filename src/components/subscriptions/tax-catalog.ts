@@ -27,6 +27,18 @@ export const ALL_TAX_TABLE_ROWS = Array.from({ length: 24 }, (_, i) => ({
   taxId: `TID${5343 + i}`,
 }));
 
+/**
+ * Single catalog row whose rate matches a rolled-up line percent (manual tax UX).
+ * Used when hydrating lines that only store `taxPercent` so Edit tax + summaries match create.
+ */
+export function catalogTaxIdsForRollupPercent(percent: number): string[] {
+  const rounded = Math.round(percent * 10) / 10;
+  const row = ALL_TAX_TABLE_ROWS.find(
+    (r) => Math.abs(r.rate - rounded) < 0.01
+  );
+  return row ? [row.id] : [];
+}
+
 /** Merge selected rows that share the same tax name (sum rates). */
 export function aggregateTaxRowsByName(
   selectedIds: string[]

@@ -87,7 +87,12 @@ export function SubscriptionsHeader() {
         initialMode?: TaxMode;
         initialSelectedTaxIds?: string[];
       }
-    | { kind: "subscription"; intent: "add" | "edit" }
+    | {
+        kind: "subscription";
+        intent: "add" | "edit";
+        initialMode?: TaxMode;
+        initialSelectedTaxIds?: string[];
+      }
     | null
   >(null);
   /** Last saved subscription-scope tax UI state (for Edit tax). */
@@ -220,7 +225,12 @@ export function SubscriptionsHeader() {
         onRequestAddLineItemTax={(payload) => {
           setLineItemTaxContext(
             payload.kind === "subscription"
-              ? { kind: "subscription", intent: payload.intent ?? "add" }
+              ? {
+                  kind: "subscription",
+                  intent: payload.intent ?? "add",
+                  initialMode: payload.initialMode,
+                  initialSelectedTaxIds: payload.initialSelectedTaxIds,
+                }
               : {
                   kind: "line",
                   rowId: payload.rowId,
@@ -336,7 +346,7 @@ export function SubscriptionsHeader() {
             ? lineItemTaxContext.initialMode
             : lineItemTaxContext?.kind === "subscription" &&
                 lineItemTaxContext.intent === "edit"
-              ? subscriptionTaxSelection?.mode
+              ? lineItemTaxContext.initialMode ?? subscriptionTaxSelection?.mode
               : undefined
         }
         initialSelectedTaxIds={
@@ -346,8 +356,11 @@ export function SubscriptionsHeader() {
             ? lineItemTaxContext.initialSelectedTaxIds
             : lineItemTaxContext?.kind === "subscription" &&
                 lineItemTaxContext.intent === "edit" &&
-                subscriptionTaxSelection?.mode === "manual"
-              ? subscriptionTaxSelection.selectedTaxIds
+                (lineItemTaxContext.initialMode ??
+                  subscriptionTaxSelection?.mode ??
+                  "manual") === "manual"
+              ? lineItemTaxContext.initialSelectedTaxIds ??
+                subscriptionTaxSelection?.selectedTaxIds
               : undefined
         }
         onOpenChange={(next) => {

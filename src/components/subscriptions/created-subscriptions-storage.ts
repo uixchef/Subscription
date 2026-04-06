@@ -23,6 +23,16 @@ export function loadCreatedSubscriptions(): SubscriptionRow[] {
 function isCreatedProductLineLike(x: unknown): x is CreatedProductLineSnapshot {
   if (!x || typeof x !== "object") return false;
   const o = x as Record<string, unknown>;
+  const taxModeOk =
+    o.taxMode === undefined ||
+    o.taxMode === null ||
+    o.taxMode === "automatic" ||
+    o.taxMode === "manual";
+  const ids = o.taxSelectedIds;
+  const taxIdsOk =
+    ids === undefined ||
+    ids === null ||
+    (Array.isArray(ids) && ids.every((id) => typeof id === "string"));
   return (
     typeof o.name === "string" &&
     typeof o.price === "number" &&
@@ -30,7 +40,9 @@ function isCreatedProductLineLike(x: unknown): x is CreatedProductLineSnapshot {
     typeof o.qty === "number" &&
     Number.isFinite(o.qty) &&
     (o.taxPercent === null ||
-      (typeof o.taxPercent === "number" && Number.isFinite(o.taxPercent)))
+      (typeof o.taxPercent === "number" && Number.isFinite(o.taxPercent))) &&
+    taxModeOk &&
+    taxIdsOk
   );
 }
 

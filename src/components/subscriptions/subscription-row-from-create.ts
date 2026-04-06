@@ -33,6 +33,10 @@ export function buildSubscriptionRowFromCreateModal(args: {
   productLines: CreatedProductLineSnapshot[];
   amount: number;
   paymentMode: SubscriptionPaymentMode;
+  /** Persisted for Update modal rehydration — empty string means “not set / cleared”. */
+  savedCouponCode: string;
+  savedCouponDiscountAmount: number;
+  savedBusinessTaxId: string;
 }): SubscriptionRow {
   const names = args.productNames.map((n) => n.trim()).filter(Boolean);
   let source = "Subscription";
@@ -45,6 +49,8 @@ export function buildSubscriptionRowFromCreateModal(args: {
     price: l.price,
     qty: naturalQty(l.qty),
     taxPercent: l.taxPercent,
+    taxMode: l.taxMode ?? null,
+    taxSelectedIds: l.taxSelectedIds ?? null,
   }));
 
   return {
@@ -60,6 +66,9 @@ export function buildSubscriptionRowFromCreateModal(args: {
     status: "Active",
     paymentMode: args.paymentMode,
     createdProductLines: lines.length > 0 ? lines : undefined,
+    savedCouponCode: args.savedCouponCode,
+    savedCouponDiscountAmount: args.savedCouponDiscountAmount,
+    savedBusinessTaxId: args.savedBusinessTaxId,
   };
 }
 
@@ -74,6 +83,9 @@ export function mergeSubscriptionRowFromUpdateModal(args: {
   productLines: CreatedProductLineSnapshot[];
   amount: number;
   paymentMode: SubscriptionPaymentMode;
+  savedCouponCode: string;
+  savedCouponDiscountAmount: number;
+  savedBusinessTaxId: string;
 }): SubscriptionRow {
   const names = args.productNames.map((n) => n.trim()).filter(Boolean);
   let source = "Subscription";
@@ -86,6 +98,8 @@ export function mergeSubscriptionRowFromUpdateModal(args: {
     price: l.price,
     qty: naturalQty(l.qty),
     taxPercent: l.taxPercent,
+    taxMode: l.taxMode ?? null,
+    taxSelectedIds: l.taxSelectedIds ?? null,
   }));
 
   return {
@@ -98,5 +112,8 @@ export function mergeSubscriptionRowFromUpdateModal(args: {
     amount: formatUsd(args.amount),
     paymentMode: args.paymentMode,
     createdProductLines: lines.length > 0 ? lines : undefined,
+    savedCouponCode: args.savedCouponCode,
+    savedCouponDiscountAmount: args.savedCouponDiscountAmount,
+    savedBusinessTaxId: args.savedBusinessTaxId,
   };
 }
