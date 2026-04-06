@@ -221,4 +221,5 @@ Assets live in `docs/screenshots/` and render on the repo home page for visitors
 
 ## License
 
-Private / internal use unless a public license is added.
+This project is proprietary and intended for internal use only.
+Unauthorized copying, distribution, or use is prohibited.
