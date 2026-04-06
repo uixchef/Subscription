@@ -166,16 +166,9 @@ src/
 
 ## Screenshots / demo
 
-<!-- Add: dashboard (filtered) -->
-![subscriptions dashboard](docs/screenshots/dashboard.png)
+![subscriptions dashboard](docs/screenshots/subscriptions-dashboard.png)
 
-<!-- Add: subscription detail -->
-![subscription details](docs/screenshots/detail.png)
-
-<!-- Add: update subscription — preview -->
-![update subscription preview](docs/screenshots/update-preview.png)
-
-*Replace paths after adding assets under `docs/screenshots/` or your preferred docs folder.*
+*Subscription list (Payments hub). Add more PNGs under `docs/screenshots/` and link them here—for example `detail.png` and `update-preview.png`—when you have captures for subscription detail and update subscription preview.*
 
 ---
 
