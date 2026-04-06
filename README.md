@@ -178,6 +178,12 @@ Assets live in `docs/screenshots/` and render on the repo home page for visitors
 
 ![subscriptions dashboard — populated](docs/screenshots/subscriptions-dashboard.png)
 
+### Subscription details
+
+*Drill-in page: trial banner, totals, payment/source/customer cards, products and transaction tables, invoices, and summary timeline.*
+
+![subscription details](docs/screenshots/subscription-details.png)
+
 ### Create subscription
 
 *Modal flow: catalog line items, live vs test, apply coupon / add tax, and totals.*
