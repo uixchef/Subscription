@@ -149,6 +149,9 @@ nextjs-portal {
   body {
     @apply h-full overflow-hidden;
   }
+  html {
+    scrollbar-gutter: stable;
+  }
   body {
     @apply bg-background text-foreground font-sans;
   }

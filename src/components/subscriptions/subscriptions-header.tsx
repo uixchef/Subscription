@@ -144,17 +144,17 @@ export function SubscriptionsHeader() {
   );
 
   return (
-    <div className="flex h-fit w-full min-w-0 shrink-0 items-center border-b border-[#d0d5dd] bg-white px-4 pb-2 pt-2">
-      <div className="flex w-full min-w-0 flex-wrap items-center justify-center gap-4">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-base font-semibold leading-6 text-[#101828]">
-            Subscriptions
-          </h1>
-          <p className="mt-0 text-sm leading-5 text-[#475467]">
-            Keep track of customer subscriptions created via order forms.
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+    <>
+    <div className="flex h-[62px] w-full min-w-0 shrink-0 items-center gap-3 border-b border-[#d0d5dd] bg-white px-4">
+      <div className="min-w-0 flex-1">
+        <h1 className="truncate text-base font-semibold leading-6 text-[#101828]">
+          Subscriptions
+        </h1>
+        <p className="sr-only">
+          Keep track of customer subscriptions created via order forms.
+        </p>
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Button
             type="button"
             variant="outline"
@@ -168,7 +168,7 @@ export function SubscriptionsHeader() {
           </Button>
           <Button
             type="button"
-            className="h-auto gap-2 rounded border border-[#155eef] bg-[#155eef] px-2.5 py-1.5 text-base font-semibold text-white shadow-[0_1px_2px_rgba(16,24,40,0.05)] hover:bg-[#155eef]/90"
+            className="h-9 gap-2 rounded border border-[#155eef] bg-[#155eef] px-2.5 py-1.5 text-base font-semibold text-white shadow-[0_1px_2px_rgba(16,24,40,0.05)] hover:bg-[#155eef]/90"
             onClick={() => {
               setCreateModalKey((k) => k + 1);
               setCustomerEditFields(null);
@@ -396,6 +396,6 @@ export function SubscriptionsHeader() {
           setCreateOpen(true);
         }}
       />
-    </div>
+    </>
   );
 }

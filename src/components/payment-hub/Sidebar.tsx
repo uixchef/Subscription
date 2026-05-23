@@ -1,30 +1,15 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { usePaymentsHubSidebarCollapsed } from "@/lib/payment-hub-sidebar";
 import { cn } from "@/lib/utils";
 
 const ICON = "/icons/sidebar";
 /** Copied from HighLevel: `Icons/Overview/chevron-left.svg` (30×30 control w/ mint fill + shadow). */
 const COLLAPSE_CONTROL_SRC = "/icons/overview/chevron-left.svg";
-
-const NARROW_QUERY = "(max-width: 1023px)";
-
-function useNarrowViewport() {
-  return useSyncExternalStore(
-    (onStoreChange) => {
-      if (typeof window === "undefined") return () => {};
-      const mq = window.matchMedia(NARROW_QUERY);
-      mq.addEventListener("change", onStoreChange);
-      return () => mq.removeEventListener("change", onStoreChange);
-    },
-    () => window.matchMedia(NARROW_QUERY).matches,
-    () => false
-  );
-}
 
 const navGroupBeforePayments = [
   { label: "Launchpad", file: "arrow-circle-up.svg" },
@@ -99,9 +84,7 @@ function NavRow({
 }
 
 export function Sidebar() {
-  const isNarrow = useNarrowViewport();
-  const [manualCollapsed, setManualCollapsed] = useState<boolean | null>(null);
-  const collapsed = manualCollapsed ?? isNarrow;
+  const { collapsed, toggleCollapsed } = usePaymentsHubSidebarCollapsed();
 
   return (
     <aside
@@ -333,12 +316,7 @@ export function Sidebar() {
       {/* Sidebar rail control — full asset from HighLevel Overview (not removed; replaces ad-hoc circle+icon). */}
       <button
         type="button"
-        onClick={() => {
-          setManualCollapsed((prev) => {
-            const current = prev ?? isNarrow;
-            return !current;
-          });
-        }}
+        onClick={toggleCollapsed}
         aria-expanded={!collapsed}
         aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         className="absolute bottom-6 left-full z-50 inline-flex min-h-[30px] min-w-[30px] -translate-x-1/2 cursor-pointer items-center justify-center border-0 bg-transparent p-0 shadow-none hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#101828]/25"
