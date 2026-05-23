@@ -7,7 +7,7 @@ export const PAYMENTS_HUB_DEFAULTS = {
     "https://subscription-pi-nine.vercel.app/subscriptions",
   integrations:
     process.env.NEXT_PUBLIC_INTEGRATIONS_APP_URL ??
-    "http://localhost:3000/integrations",
+    "https://payment-integrations.vercel.app/integrations",
 } as const
 
 const NAV_CONTEXT_KEY = "payments-hub-nav-context"
@@ -108,7 +108,7 @@ export function resolvePaymentsHubNavUrls(
   } else if (app === "overview") {
     patch.overview = `${window.location.origin}/payment-hub`
   } else {
-    patch.integrations = `${window.location.origin}/integrations`
+    patch.integrations = PAYMENTS_HUB_DEFAULTS.integrations
   }
 
   syncPaymentsHubNav(patch)
