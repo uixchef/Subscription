@@ -6,22 +6,43 @@ import {
   HelpCircle,
   Bell,
 } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
+import {
+  PAYMENTS_HUB_DEFAULTS,
+  resolvePaymentsHubNavUrls,
+  type PaymentsHubNavUrls,
+} from "@/lib/payment-hub-nav";
 import { cn } from "@/lib/utils";
 
 const primaryTabs = [
-  { id: "overview", label: "Overview" },
+  { id: "overview", label: "Overview", target: "overview" as const },
   { id: "invoices", label: "Invoices & estimates" },
   { id: "docs", label: "Docs & contracts" },
-  { id: "subscriptions", label: "Subscriptions" },
+  {
+    id: "subscriptions",
+    label: "Subscriptions",
+    target: "subscriptions" as const,
+    internalHref: "/subscriptions",
+  },
   { id: "products", label: "Products" },
-  { id: "integrations", label: "Integrations" },
+  { id: "integrations", label: "Integrations", target: "integrations" as const },
 ] as const;
 
-function getActiveTabId(
-  pathname: string
-): (typeof primaryTabs)[number]["id"] {
+type PrimaryTab = (typeof primaryTabs)[number];
+
+function primaryTabClassName(isActive: boolean) {
+  return cn(
+    "inline-flex h-10 shrink-0 items-center border-b-2 px-2 text-base leading-6 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#155eef]/40",
+    isActive
+      ? "border-[#004eeb] font-semibold text-[#004eeb]"
+      : "border-transparent font-medium text-[#667085] hover:text-[#101828]"
+  );
+}
+
+function getActiveTabId(pathname: string): PrimaryTab["id"] {
   if (pathname === "/subscriptions" || pathname.startsWith("/subscriptions/")) {
     return "subscriptions";
   }
@@ -34,6 +55,15 @@ function getActiveTabId(
 export function Topbar() {
   const pathname = usePathname();
   const activeTabId = getActiveTabId(pathname);
+  const [navUrls, setNavUrls] = useState<PaymentsHubNavUrls>({
+    overview: PAYMENTS_HUB_DEFAULTS.overview,
+    subscriptions: PAYMENTS_HUB_DEFAULTS.subscriptions,
+    integrations: PAYMENTS_HUB_DEFAULTS.integrations,
+  });
+
+  useEffect(() => {
+    setNavUrls(resolvePaymentsHubNavUrls("subscriptions"));
+  }, [pathname]);
 
   return (
     <header className="w-full min-w-0 border-b border-[#d0d5dd] bg-white">
@@ -48,18 +78,42 @@ export function Topbar() {
           >
             {primaryTabs.map((tab) => {
               const isActive = tab.id === activeTabId;
+              const label = (
+                <span className="whitespace-nowrap">{tab.label}</span>
+              );
+
+              if ("internalHref" in tab && tab.internalHref) {
+                return (
+                  <Link
+                    key={tab.id}
+                    href={tab.internalHref}
+                    aria-current={isActive ? "page" : undefined}
+                    className={primaryTabClassName(isActive)}
+                  >
+                    {label}
+                  </Link>
+                );
+              }
+
+              if ("target" in tab && tab.target) {
+                return (
+                  <a
+                    key={tab.id}
+                    href={navUrls[tab.target]}
+                    className={primaryTabClassName(isActive)}
+                  >
+                    {label}
+                  </a>
+                );
+              }
+
               return (
                 <button
                   key={tab.id}
                   type="button"
-                  className={cn(
-                    "inline-flex h-10 shrink-0 items-center border-b-2 px-2 text-base leading-6 transition-colors",
-                    isActive
-                      ? "border-[#004eeb] font-semibold text-[#004eeb]"
-                      : "border-transparent font-medium text-[#667085] hover:text-[#101828]"
-                  )}
+                  className={primaryTabClassName(isActive)}
                 >
-                  <span className="whitespace-nowrap">{tab.label}</span>
+                  {label}
                 </button>
               );
             })}
